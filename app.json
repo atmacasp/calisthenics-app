@@ -3,6 +3,7 @@
     "name": "calisthenics-app",
     "slug": "calisthenics-app",
     "version": "1.0.0",
+    "scheme": "calisthenicsapp",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -20,6 +21,10 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-font",
+      "expo-splash-screen"
+    ]
   }
 }
