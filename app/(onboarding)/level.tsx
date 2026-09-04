@@ -6,7 +6,7 @@ import { useAuthStore } from "../../src/store/authStore";
 import { profileService } from "../../src/services/profile.service";
 
 export default function LevelScreen() {
-  const [level, setLevel] = useState<"beginner" | "intermediate" | null>(null);
+  const [level, setLevel] = useState<"beginner" | "intermediate" | "advanced" | null>(null);
   const [loading, setLoading] = useState(false);
   const onboardingData = useOnboardingStore((s) => s);
   const session = useAuthStore((s) => s.session);
@@ -41,6 +41,9 @@ export default function LevelScreen() {
       </TouchableOpacity>
       <TouchableOpacity style={[styles.option, level === "intermediate" && styles.optionActive]} onPress={() => setLevel("intermediate")}>
         <Text style={level === "intermediate" ? styles.optionTextActive : styles.optionText}>Orta Seviye</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={[styles.option, level === "advanced" && styles.optionActive]} onPress={() => setLevel("advanced")}>
+        <Text style={level === "advanced" ? styles.optionTextActive : styles.optionText}>İleri Seviye</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.button} onPress={onSubmit} disabled={!level || loading}>

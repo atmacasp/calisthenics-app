@@ -8,7 +8,7 @@ export const onboardingInfoSchema = z.object({
 });
 
 export const onboardingLevelSchema = z.object({
-  level: z.enum(["beginner", "intermediate"]),
+  level: z.enum(["beginner", "intermediate", "advanced"]),
 });
 
 export type OnboardingInfoData = z.infer<typeof onboardingInfoSchema>;

@@ -21,8 +21,19 @@ export const movementsService = {
   async getMovementById(id: string) {
     const { data, error } = await supabase
       .from("movements")
-      .select("*, movement_groups(name)")
+      .select(`
+        *,
+        movement_groups(name),
+        prerequisites:movement_prerequisites!movement_prerequisites_movement_id_fkey(
+          target_sets,
+          target_reps,
+          target_duration_seconds,
+          order_index,
+          prerequisite_movement:movements!movement_prerequisites_prerequisite_movement_id_fkey(id, name, movement_type, target_type, target_sets, target_reps, target_duration_seconds)
+        )
+      `)
       .eq("id", id)
+      .order("order_index", { referencedTable: "movement_prerequisites", ascending: true })
       .single();
     if (error) throw error;
     return data;

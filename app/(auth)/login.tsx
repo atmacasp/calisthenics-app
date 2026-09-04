@@ -17,7 +17,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await authService.signIn(data.email, data.password);
-      router.replace("/(tabs)");
+      router.replace("/");
     } catch (error: any) {
       Alert.alert("Giriş Hatası", error.message ?? "Bir hata oluştu");
     } finally {
