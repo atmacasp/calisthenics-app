@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import type { MovementSetLogMap, SetLogEntry } from "../types/movements";
 
 function getMonday(weekOffset: number) {
   const d = new Date();
@@ -61,6 +62,32 @@ export const progressService = {
     });
 
     return Object.entries(prMap).map(([movementId, pr]) => ({ movementId, ...pr }));
+  },
+
+  /**
+   * Ön koşul/hedef kilit mekaniği için: kullanıcının attığı her seti,
+   * hareket ve session bazında gruplar. "3 set x 15 tekrar" gibi hedefler
+   * TEK bir session içindeki set sayısına bakılarak değerlendirilebilsin diye
+   * (bkz. src/utils/targetProgress.ts) session_id ayrımı korunuyor.
+   */
+  async getMovementSetLogs(userId: string): Promise<MovementSetLogMap> {
+    const { data, error } = await supabase
+      .from("workout_sets")
+      .select("movement_id, session_id, reps, duration_seconds, workout_sessions!inner(user_id)")
+      .eq("workout_sessions.user_id", userId);
+    if (error) throw error;
+
+    const map: MovementSetLogMap = {};
+    (data ?? []).forEach((row: any) => {
+      const movementId: string | null = row.movement_id;
+      const sessionId: string | null = row.session_id;
+      if (!movementId || !sessionId) return;
+      if (!map[movementId]) map[movementId] = {};
+      if (!map[movementId][sessionId]) map[movementId][sessionId] = [];
+      const entry: SetLogEntry = { reps: row.reps, duration_seconds: row.duration_seconds };
+      map[movementId][sessionId].push(entry);
+    });
+    return map;
   },
 
   async getLast7DaysActivity(userId: string) {

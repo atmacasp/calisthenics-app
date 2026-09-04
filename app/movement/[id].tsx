@@ -1,35 +1,50 @@
-import { View, Text, ScrollView, StyleSheet, Image, TouchableOpacity } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Image, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useEffect, useState } from "react";
 import { useLocalSearchParams, Stack, router } from "expo-router";
-import { movementsService } from "../../src/services/movements.service";
 import { Feather } from "@expo/vector-icons";
+import { movementsService } from "../../src/services/movements.service";
+import { progressService } from "../../src/services/progress.service";
+import { useAuthStore } from "../../src/store/authStore";
+import type { MovementWithPrerequisites, MovementSetLogMap } from "../../src/types/movements";
+import { getPrerequisiteTarget, isPrerequisiteMet } from "../../src/utils/targetProgress";
+import type { TargetSpec } from "../../src/types/movements";
 
-function formatTarget(m: any) {
-  if (!m?.target_type) return null;
-  if (m.target_type === "reps_sets" && m.target_sets && m.target_reps) {
-    return `${m.target_sets} set x ${m.target_reps} tekrar`;
+function formatTarget(t: TargetSpec | null | undefined) {
+  if (!t?.target_type) return null;
+  if (t.target_type === "reps_sets" && t.target_sets && t.target_reps) {
+    return `${t.target_sets} set x ${t.target_reps} tekrar`;
   }
-  if (m.target_type === "duration" && m.target_duration_seconds) {
-    return `${m.target_duration_seconds} saniye tutuş`;
+  if (t.target_type === "duration" && t.target_duration_seconds) {
+    return `${t.target_duration_seconds} saniye tutuş`;
   }
   return null;
 }
 
 export default function MovementDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [movement, setMovement] = useState<any>(null);
+  const userId = useAuthStore((s) => s.session?.user.id);
+  const [movement, setMovement] = useState<MovementWithPrerequisites | null>(null);
+  const [setLogMap, setSetLogMap] = useState<MovementSetLogMap>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (id) {
-      movementsService.getMovementById(id).then(setMovement).finally(() => setLoading(false));
-    }
-  }, [id]);
+    if (!id) return;
+    setLoading(true);
+    Promise.all([
+      movementsService.getMovementById(id),
+      userId ? progressService.getMovementSetLogs(userId) : Promise.resolve({} as MovementSetLogMap),
+    ])
+      .then(([m, logs]) => {
+        setMovement(m);
+        setSetLogMap(logs);
+      })
+      .finally(() => setLoading(false));
+  }, [id, userId]);
 
   if (loading) {
     return (
       <View style={styles.center}>
-        <Text>Yükleniyor...</Text>
+        <ActivityIndicator color="#22c55e" />
       </View>
     );
   }
@@ -44,6 +59,8 @@ export default function MovementDetailScreen() {
 
   const targetText = formatTarget(movement);
   const prerequisites = movement.prerequisites ?? [];
+  const metCount = prerequisites.filter((p) => isPrerequisiteMet(p, setLogMap)).length;
+  const allMet = prerequisites.length === 0 || metCount === prerequisites.length;
 
   return (
     <ScrollView style={styles.container}>
@@ -73,15 +90,20 @@ export default function MovementDetailScreen() {
 
         {prerequisites.length > 0 && (
           <View style={styles.prereqSection}>
-            <Text style={styles.prereqTitle}>Bu adıma geçmeden önce</Text>
+            <View style={styles.prereqHeaderRow}>
+              <Text style={styles.prereqTitle}>Bu adıma geçmeden önce</Text>
+              <View style={[styles.statusPill, allMet ? styles.statusPillMet : styles.statusPillLocked]}>
+                <Feather name={allMet ? "unlock" : "lock"} size={12} color={allMet ? "#059669" : "#b45309"} />
+                <Text style={[styles.statusPillText, { color: allMet ? "#059669" : "#b45309" }]}>
+                  {allMet ? "Hazırsın" : `${metCount}/${prerequisites.length} tamam`}
+                </Text>
+              </View>
+            </View>
             <Text style={styles.prereqHint}>Detayını görmek için bir hareketin üzerine dokun</Text>
-            {prerequisites.map((p: any) => {
+            {prerequisites.map((p) => {
               const pm = p.prerequisite_movement;
-              const overrideTarget = p.target_duration_seconds
-                ? `${p.target_duration_seconds} saniye`
-                : p.target_sets && p.target_reps
-                ? `${p.target_sets} set x ${p.target_reps} tekrar`
-                : formatTarget(pm);
+              const overrideTarget = formatTarget(getPrerequisiteTarget(p));
+              const met = isPrerequisiteMet(p, setLogMap);
               return (
                 <TouchableOpacity
                   key={pm.id}
@@ -89,11 +111,17 @@ export default function MovementDetailScreen() {
                   activeOpacity={0.6}
                   onPress={() => router.push(`/movement/${pm.id}`)}
                 >
-                  <View style={styles.prereqAccent} />
+                  <View style={[styles.prereqAccent, { backgroundColor: met ? "#22c55e" : "#d1d5db" }]} />
                   <View style={styles.prereqLeft}>
                     <Text style={styles.prereqName}>{pm.name}</Text>
                     {overrideTarget && <Text style={styles.prereqTarget}>{overrideTarget}</Text>}
                   </View>
+                  <Feather
+                    name={met ? "check-circle" : "lock"}
+                    size={18}
+                    color={met ? "#22c55e" : "#9ca3af"}
+                    style={{ marginRight: 8 }}
+                  />
                   <Feather name="chevron-right" size={20} color="#9ca3af" />
                 </TouchableOpacity>
               );
@@ -122,7 +150,19 @@ const styles = StyleSheet.create({
   targetValue: { fontSize: 18, fontWeight: "700", color: "#065f46" },
   targetNote: { fontSize: 13, color: "#047857", marginTop: 6 },
   prereqSection: { marginTop: 24 },
+  prereqHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   prereqTitle: { fontSize: 16, fontWeight: "700", color: "#111827" },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusPillMet: { backgroundColor: "#d1fae5" },
+  statusPillLocked: { backgroundColor: "#fef3c7" },
+  statusPillText: { fontSize: 12, fontWeight: "700" },
   prereqHint: { fontSize: 12, color: "#9ca3af", marginTop: 2, marginBottom: 10 },
   prereqRow: {
     flexDirection: "row",
