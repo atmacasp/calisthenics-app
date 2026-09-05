@@ -1,5 +1,11 @@
+
 import { supabase } from "../lib/supabase";
-import type { MovementGroupRow, MovementListItem, MovementWithPrerequisites } from "../types/movements";
+import type {
+  MovementFlatItem,
+  MovementGroupRow,
+  MovementListItem,
+  MovementWithPrerequisites,
+} from "../types/movements";
 
 // movement_prerequisites tablosunda movements'a iki farklı FK var (movement_id ve
 // prerequisite_movement_id), bu yüzden embed her yerde constraint adıyla netleştiriliyor.
@@ -60,12 +66,19 @@ export const movementsService = {
     return data as unknown as MovementWithPrerequisites;
   },
 
-  async getAllMovementsFlat() {
+  /**
+   * Hareket Seç ekranı için düz liste. Önce kategorinin kendi order_index'ine
+   * (Temel Güç -> Handstand -> ... -> Planche), sonra kategorinin içinde
+   * basamağın kendi order_index'ine göre sıralanır - böylece ekranda hem
+   * kategoriler hem de her zincirin basamakları mantıklı sırada görünür.
+   */
+  async getAllMovementsFlat(): Promise<MovementFlatItem[]> {
     const { data, error } = await supabase
       .from("movements")
-      .select("id, name, group_id, movement_groups(name, order_index)")
-      .order("group_id");
+      .select("id, name, order_index, difficulty_level, movement_groups(name, order_index)")
+      .order("order_index", { referencedTable: "movement_groups", ascending: true })
+      .order("order_index", { ascending: true });
     if (error) throw error;
-    return data ?? [];
+    return (data ?? []) as unknown as MovementFlatItem[];
   },
 };
