@@ -1,3 +1,4 @@
+
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
 import { useEffect, useState } from "react";
 import { router, useLocalSearchParams, Stack } from "expo-router";
@@ -5,6 +6,7 @@ import { Feather } from "@expo/vector-icons";
 import { movementsService } from "../../src/services/movements.service";
 import { progressService } from "../../src/services/progress.service";
 import { useAuthStore } from "../../src/store/authStore";
+import { COLORS } from "../../src/constants/theme";
 import type { MovementListItem, MovementSetLogMap } from "../../src/types/movements";
 import { areAllPrerequisitesMet } from "../../src/utils/targetProgress";
 
@@ -32,7 +34,8 @@ export default function MovementGroupScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color="#22c55e" />
+        <Stack.Screen options={{ headerShown: true, title: name ?? "Progression" }} />
+        <ActivityIndicator size="large" color={COLORS.accent} />
       </View>
     );
   }
@@ -40,45 +43,92 @@ export default function MovementGroupScreen() {
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: true, title: name ?? "Progression" }} />
+      <View style={styles.headerContainer}>
+        <Text style={styles.headerSubtitle}>Basamakları sırayla tamamlayarak ilerle</Text>
+      </View>
       <FlatList
         data={movements}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 16 }}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
         renderItem={({ item, index }) => {
           const unlocked = areAllPrerequisitesMet(item.prerequisites ?? [], setLogMap);
+          const isLast = index === movements.length - 1;
           return (
-            <TouchableOpacity style={styles.row} onPress={() => router.push(`/movement/${item.id}`)}>
-              <View style={[styles.stepCircle, !unlocked && styles.stepCircleLocked]}>
-                {unlocked ? (
-                  <Text style={styles.stepNumber}>{index + 1}</Text>
-                ) : (
-                  <Feather name="lock" size={14} color="white" />
-                )}
-              </View>
-              <View style={styles.rowContent}>
-                <Text style={styles.rowTitle}>{item.name}</Text>
-                <Text style={styles.rowDifficulty}>Zorluk: {item.difficulty_level}/10</Text>
-              </View>
-              {!unlocked && <Text style={styles.lockedHint}>Ön koşul gerekiyor</Text>}
-            </TouchableOpacity>
+            <View>
+              <TouchableOpacity
+                style={styles.row}
+                activeOpacity={0.7}
+                onPress={() => router.push(`/movement/${item.id}`)}
+              >
+                <View style={[styles.stepCircle, !unlocked && styles.stepCircleLocked]}>
+                  {unlocked ? (
+                    <Text style={styles.stepNumber}>{index + 1}</Text>
+                  ) : (
+                    <Feather name="lock" size={14} color={COLORS.white} />
+                  )}
+                </View>
+                <View style={styles.rowContent}>
+                  <Text style={styles.rowTitle}>{item.name}</Text>
+                  <Text style={styles.rowDifficulty}>
+                    {unlocked ? `Zorluk: ${item.difficulty_level}/10` : "Ön koşul gerekiyor"}
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={20} color={COLORS.graphite} />
+              </TouchableOpacity>
+              {!isLast && <View style={styles.connector} />}
+            </View>
           );
         }}
-        ItemSeparatorComponent={() => <View style={styles.connector} />}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  row: { flexDirection: "row", alignItems: "center", backgroundColor: "#f3f4f6", padding: 16, borderRadius: 12 },
-  stepCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: "#22c55e", alignItems: "center", justifyContent: "center", marginRight: 12 },
-  stepCircleLocked: { backgroundColor: "#9ca3af" },
-  stepNumber: { color: "white", fontWeight: "700" },
+  container: { flex: 1, backgroundColor: COLORS.paper },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.paper },
+  headerContainer: {
+    paddingHorizontal: 22,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  headerSubtitle: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    color: COLORS.graphite,
+  },
+  listContent: {
+    paddingHorizontal: 22,
+    paddingTop: 8,
+    paddingBottom: 40,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.white,
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    shadowColor: COLORS.ink,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  stepCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 14,
+  },
+  stepCircleLocked: { backgroundColor: COLORS.graphite },
+  stepNumber: { color: COLORS.white, fontFamily: "Inter_700Bold", fontSize: 14 },
   rowContent: { flex: 1 },
-  rowTitle: { fontSize: 16, fontWeight: "600" },
-  rowDifficulty: { fontSize: 12, color: "#6b7280", marginTop: 2 },
-  lockedHint: { fontSize: 11, color: "#9ca3af", fontStyle: "italic" },
-  connector: { width: 2, height: 16, backgroundColor: "#d1d5db", marginLeft: 31 },
+  rowTitle: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: COLORS.ink },
+  rowDifficulty: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, marginTop: 2 },
+  connector: { width: 2, height: 14, backgroundColor: COLORS.line, marginLeft: 32 },
 });

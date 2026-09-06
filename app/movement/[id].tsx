@@ -1,3 +1,4 @@
+
 import { View, Text, ScrollView, StyleSheet, Image, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useEffect, useState } from "react";
 import { useLocalSearchParams, Stack, router } from "expo-router";
@@ -5,9 +6,9 @@ import { Feather } from "@expo/vector-icons";
 import { movementsService } from "../../src/services/movements.service";
 import { progressService } from "../../src/services/progress.service";
 import { useAuthStore } from "../../src/store/authStore";
-import type { MovementWithPrerequisites, MovementSetLogMap } from "../../src/types/movements";
+import { COLORS } from "../../src/constants/theme";
+import type { MovementWithPrerequisites, MovementSetLogMap, TargetSpec } from "../../src/types/movements";
 import { getPrerequisiteTarget, isPrerequisiteMet } from "../../src/utils/targetProgress";
-import type { TargetSpec } from "../../src/types/movements";
 
 function formatTarget(t: TargetSpec | null | undefined) {
   if (!t?.target_type) return null;
@@ -44,7 +45,8 @@ export default function MovementDetailScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color="#22c55e" />
+        <Stack.Screen options={{ headerShown: true, title: "Hareket" }} />
+        <ActivityIndicator size="large" color={COLORS.accent} />
       </View>
     );
   }
@@ -52,7 +54,8 @@ export default function MovementDetailScreen() {
   if (!movement) {
     return (
       <View style={styles.center}>
-        <Text>Hareket bulunamadı.</Text>
+        <Stack.Screen options={{ headerShown: true, title: "Hareket" }} />
+        <Text style={styles.notFoundText}>Hareket bulunamadı.</Text>
       </View>
     );
   }
@@ -93,8 +96,8 @@ export default function MovementDetailScreen() {
             <View style={styles.prereqHeaderRow}>
               <Text style={styles.prereqTitle}>Bu adıma geçmeden önce</Text>
               <View style={[styles.statusPill, allMet ? styles.statusPillMet : styles.statusPillLocked]}>
-                <Feather name={allMet ? "unlock" : "lock"} size={12} color={allMet ? "#059669" : "#b45309"} />
-                <Text style={[styles.statusPillText, { color: allMet ? "#059669" : "#b45309" }]}>
+                <Feather name={allMet ? "unlock" : "lock"} size={12} color={allMet ? COLORS.accent : COLORS.graphite} />
+                <Text style={[styles.statusPillText, { color: allMet ? COLORS.accent : COLORS.graphite }]}>
                   {allMet ? "Hazırsın" : `${metCount}/${prerequisites.length} tamam`}
                 </Text>
               </View>
@@ -108,10 +111,10 @@ export default function MovementDetailScreen() {
                 <TouchableOpacity
                   key={pm.id}
                   style={styles.prereqRow}
-                  activeOpacity={0.6}
+                  activeOpacity={0.7}
                   onPress={() => router.push(`/movement/${pm.id}`)}
                 >
-                  <View style={[styles.prereqAccent, { backgroundColor: met ? "#22c55e" : "#d1d5db" }]} />
+                  <View style={[styles.prereqAccent, { backgroundColor: met ? COLORS.accent : COLORS.line }]} />
                   <View style={styles.prereqLeft}>
                     <Text style={styles.prereqName}>{pm.name}</Text>
                     {overrideTarget && <Text style={styles.prereqTarget}>{overrideTarget}</Text>}
@@ -119,10 +122,10 @@ export default function MovementDetailScreen() {
                   <Feather
                     name={met ? "check-circle" : "lock"}
                     size={18}
-                    color={met ? "#22c55e" : "#9ca3af"}
+                    color={met ? COLORS.accent : COLORS.graphite}
                     style={{ marginRight: 8 }}
                   />
-                  <Feather name="chevron-right" size={20} color="#9ca3af" />
+                  <Feather name="chevron-right" size={20} color={COLORS.graphite} />
                 </TouchableOpacity>
               );
             })}
@@ -134,24 +137,68 @@ export default function MovementDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "white" },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  imagePlaceholder: { height: 220, backgroundColor: "#e5e7eb", alignItems: "center", justifyContent: "center" },
+  container: { flex: 1, backgroundColor: COLORS.paper },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.paper },
+  notFoundText: { fontFamily: "Inter_400Regular", fontSize: 15, color: COLORS.graphite },
+  imagePlaceholder: {
+    height: 220,
+    backgroundColor: COLORS.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   image: { width: "100%", height: "100%" },
-  placeholderText: { color: "#9ca3af" },
-  content: { padding: 20 },
-  category: { color: "#22c55e", fontWeight: "600", marginBottom: 4 },
-  title: { fontSize: 26, fontWeight: "bold", marginBottom: 12 },
-  difficultyBadge: { alignSelf: "flex-start", backgroundColor: "#f3f4f6", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, marginBottom: 16 },
-  difficultyText: { fontWeight: "600", color: "#374151" },
-  description: { fontSize: 16, lineHeight: 24, color: "#374151" },
-  targetCard: { marginTop: 20, backgroundColor: "#ecfdf5", borderRadius: 12, padding: 16, borderWidth: 1, borderColor: "#a7f3d0" },
-  targetLabel: { fontSize: 12, fontWeight: "700", color: "#059669", textTransform: "uppercase", marginBottom: 4 },
-  targetValue: { fontSize: 18, fontWeight: "700", color: "#065f46" },
-  targetNote: { fontSize: 13, color: "#047857", marginTop: 6 },
+  placeholderText: { fontFamily: "Inter_400Regular", color: COLORS.graphite },
+  content: { padding: 22 },
+  category: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+    color: COLORS.accent,
+    marginBottom: 4,
+  },
+  title: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 26,
+    color: COLORS.ink,
+    marginBottom: 12,
+  },
+  difficultyBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginBottom: 16,
+  },
+  difficultyText: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: COLORS.ink },
+  description: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 16,
+    lineHeight: 24,
+    color: COLORS.ink,
+  },
+  targetCard: {
+    marginTop: 20,
+    backgroundColor: "rgba(34, 197, 94, 0.08)",
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(34, 197, 94, 0.25)",
+  },
+  targetLabel: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 12,
+    color: COLORS.accent,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  targetValue: { fontFamily: "Inter_700Bold", fontSize: 18, color: COLORS.ink },
+  targetNote: { fontFamily: "Inter_400Regular", fontSize: 13, color: COLORS.graphite, marginTop: 6 },
   prereqSection: { marginTop: 24 },
   prereqHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  prereqTitle: { fontSize: 16, fontWeight: "700", color: "#111827" },
+  prereqTitle: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.ink },
   statusPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -160,25 +207,25 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
   },
-  statusPillMet: { backgroundColor: "#d1fae5" },
-  statusPillLocked: { backgroundColor: "#fef3c7" },
-  statusPillText: { fontSize: 12, fontWeight: "700" },
-  prereqHint: { fontSize: 12, color: "#9ca3af", marginTop: 2, marginBottom: 10 },
+  statusPillMet: { backgroundColor: "rgba(34, 197, 94, 0.12)" },
+  statusPillLocked: { backgroundColor: COLORS.line },
+  statusPillText: { fontFamily: "Inter_700Bold", fontSize: 12 },
+  prereqHint: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, marginTop: 2, marginBottom: 10 },
   prereqRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f9fafb",
+    backgroundColor: COLORS.white,
     borderRadius: 10,
     marginBottom: 8,
     overflow: "hidden",
-    shadowColor: "#000",
+    shadowColor: COLORS.ink,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 4,
     elevation: 1,
   },
-  prereqAccent: { width: 4, alignSelf: "stretch", backgroundColor: "#22c55e" },
+  prereqAccent: { width: 4, alignSelf: "stretch" },
   prereqLeft: { flex: 1, paddingVertical: 14, paddingLeft: 14 },
-  prereqName: { fontSize: 15, fontWeight: "600", color: "#374151" },
-  prereqTarget: { fontSize: 13, color: "#6b7280", marginTop: 2 },
+  prereqName: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: COLORS.ink },
+  prereqTarget: { fontFamily: "Inter_400Regular", fontSize: 13, color: COLORS.graphite, marginTop: 2 },
 });

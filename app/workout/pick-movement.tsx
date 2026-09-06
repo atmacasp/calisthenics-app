@@ -6,15 +6,7 @@ import { Feather } from "@expo/vector-icons";
 import { movementsService } from "../../src/services/movements.service";
 import { useWorkoutStore } from "../../src/store/workoutStore";
 import type { MovementFlatItem } from "../../src/types/movements";
-
-const COLORS = {
-  ink: "#12171B",
-  paper: "#FAF9F6",
-  graphite: "#5B6470",
-  line: "#E5E2DC",
-  accent: "#22c55e",
-  white: "#FFFFFF",
-};
+import { COLORS } from "../../src/constants/theme";
 
 interface Section {
   title: string;
@@ -43,10 +35,6 @@ export default function PickMovementScreen() {
       .finally(() => setLoading(false));
   }, []);
 
-  // movements zaten servis katmanında (kategori order_index -> basamak order_index)
-  // sırayla geliyor; burada sadece arama filtresi uygulanıp kategoriye göre gruplanıyor.
-  // Object.keys/Record sırası JS'te insertion order'ı koruduğu için gruplama, gelen
-  // sıralamayı bozmuyor.
   const sections = useMemo<Section[]>(() => {
     const q = normalize(query);
     const filtered = q.length >= MIN_QUERY_LENGTH ? movements.filter((m) => normalize(m.name).includes(q)) : movements;

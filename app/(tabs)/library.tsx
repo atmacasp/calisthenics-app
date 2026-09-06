@@ -1,17 +1,10 @@
+
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
 import { useEffect, useState } from "react";
 import { router } from "expo-router";
 import { movementsService } from "../../src/services/movements.service";
 import { Feather } from "@expo/vector-icons";
-
-const COLORS = {
-  ink: "#12171B",
-  paper: "#FAF9F6",
-  graphite: "#5B6470",
-  line: "#E5E2DC",
-  accent: "#22c55e",
-  white: "#FFFFFF",
-};
+import { COLORS } from "../../src/constants/theme";
 
 export default function LibraryScreen() {
   const [groups, setGroups] = useState<any[]>([]);
