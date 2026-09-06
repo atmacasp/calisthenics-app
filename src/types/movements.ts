@@ -55,11 +55,7 @@ export interface SetLogEntry {
 /** movement_id -> session_id -> o session'da o harekete atılan setler */
 export type MovementSetLogMap = Record<string, Record<string, SetLogEntry[]>>;
 
-/** movements.service.getAllMovementsFlat sonucundaki her satır (Hareket Seç ekranı - arama/gruplama için) */
-export interface MovementFlatItem {
-  id: string;
-  name: string;
-  order_index: number;
-  difficulty_level: MovementRow["difficulty_level"];
+/** movements.service.getAllMovementsWithPrerequisites sonucundaki her satır (Hareket Seç kilit kontrolü ve "Bugün Sırada" öneri motoru için) */
+export interface MovementWithGroupAndPrerequisites extends MovementListItem {
   movement_groups: { name: string; order_index: number } | null;
 }

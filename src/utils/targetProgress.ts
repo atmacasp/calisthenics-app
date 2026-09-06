@@ -1,3 +1,4 @@
+
 import type { MovementPrerequisite, MovementSetLogMap, SetLogEntry, TargetSpec } from "../types/movements";
 
 /**
@@ -71,4 +72,19 @@ export function areAllPrerequisitesMet(
 ): boolean {
   if (!prerequisites.length) return true;
   return prerequisites.every((p) => isPrerequisiteMet(p, setLogMap));
+}
+
+/**
+ * Bir hedefi ekranda gösterilecek okunabilir metne çevirir (ör. "3 set x 15 tekrar",
+ * "30 saniye tutuş"). movement/[id].tsx ve workout önerisi motoru aynı fonksiyonu kullanır.
+ */
+export function formatTarget(t: TargetSpec | null | undefined): string | null {
+  if (!t?.target_type) return null;
+  if (t.target_type === "reps_sets" && t.target_sets && t.target_reps) {
+    return `${t.target_sets} set x ${t.target_reps} tekrar`;
+  }
+  if (t.target_type === "duration" && t.target_duration_seconds) {
+    return `${t.target_duration_seconds} saniye tutuş`;
+  }
+  return null;
 }

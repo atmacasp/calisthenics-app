@@ -1,16 +1,19 @@
 
 import { View, Text, SectionList, TouchableOpacity, StyleSheet, TextInput, ActivityIndicator } from "react-native";
-import { useEffect, useMemo, useState } from "react";
-import { router, Stack } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
+import { router, Stack, useFocusEffect } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { movementsService } from "../../src/services/movements.service";
+import { progressService } from "../../src/services/progress.service";
+import { useAuthStore } from "../../src/store/authStore";
 import { useWorkoutStore } from "../../src/store/workoutStore";
-import type { MovementFlatItem } from "../../src/types/movements";
+import type { MovementSetLogMap, MovementWithGroupAndPrerequisites } from "../../src/types/movements";
+import { areAllPrerequisitesMet } from "../../src/utils/targetProgress";
 import { COLORS } from "../../src/constants/theme";
 
 interface Section {
   title: string;
-  data: MovementFlatItem[];
+  data: MovementWithGroupAndPrerequisites[];
 }
 
 function normalize(text: string) {
@@ -23,23 +26,39 @@ function normalize(text: string) {
 const MIN_QUERY_LENGTH = 2;
 
 export default function PickMovementScreen() {
-  const [movements, setMovements] = useState<MovementFlatItem[]>([]);
+  const userId = useAuthStore((s) => s.session?.user.id);
+  const [movements, setMovements] = useState<MovementWithGroupAndPrerequisites[]>([]);
+  const [setLogMap, setSetLogMap] = useState<MovementSetLogMap>({});
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const addMovement = useWorkoutStore((s) => s.addMovement);
 
-  useEffect(() => {
-    movementsService
-      .getAllMovementsFlat()
-      .then(setMovements)
+  const loadData = useCallback(() => {
+    if (!userId) return;
+    setLoading(true);
+    Promise.all([movementsService.getAllMovementsWithPrerequisites(), progressService.getMovementSetLogs(userId)])
+      .then(([m, logs]) => {
+        setMovements(m);
+        setSetLogMap(logs);
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [userId]);
 
+  // Bir önceki antrenmanda bir hedef yeni karşılanmış olabilir - ekrana her
+  // dönüşte kilit durumları güncel kalsın diye yeniden çekiliyor.
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  // movements zaten servis katmanında (kategori order_index -> basamak order_index)
+  // sırayla geliyor; burada sadece arama filtresi uygulanıp kategoriye göre gruplanıyor.
   const sections = useMemo<Section[]>(() => {
     const q = normalize(query);
     const filtered = q.length >= MIN_QUERY_LENGTH ? movements.filter((m) => normalize(m.name).includes(q)) : movements;
 
-    const grouped: Record<string, MovementFlatItem[]> = {};
+    const grouped: Record<string, MovementWithGroupAndPrerequisites[]> = {};
     filtered.forEach((m) => {
       const groupName = m.movement_groups?.name ?? "Diğer";
       if (!grouped[groupName]) grouped[groupName] = [];
@@ -48,7 +67,11 @@ export default function PickMovementScreen() {
     return Object.entries(grouped).map(([title, data]) => ({ title, data }));
   }, [movements, query]);
 
-  const handleSelect = (movement: MovementFlatItem) => {
+  const handleSelect = (movement: MovementWithGroupAndPrerequisites, unlocked: boolean) => {
+    if (!unlocked) {
+      router.push(`/movement/${movement.id}`);
+      return;
+    }
     addMovement({ id: movement.id, name: movement.name });
     router.back();
   };
@@ -99,18 +122,29 @@ export default function PickMovementScreen() {
             <Text style={styles.sectionHeader}>{section.title}</Text>
           </View>
         )}
-        renderItem={({ item }) => (
-          <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={() => handleSelect(item)}>
-            <View style={styles.rowAccent} />
-            <View style={styles.rowContent}>
-              <Text style={styles.rowTitle}>{item.name}</Text>
-              {item.difficulty_level != null && (
-                <Text style={styles.rowDifficulty}>Zorluk: {item.difficulty_level}/10</Text>
-              )}
-            </View>
-            <Feather name="plus-circle" size={22} color={COLORS.accent} />
-          </TouchableOpacity>
-        )}
+        renderItem={({ item }) => {
+          const unlocked = areAllPrerequisitesMet(item.prerequisites ?? [], setLogMap);
+          return (
+            <TouchableOpacity
+              style={[styles.row, !unlocked && styles.rowLocked]}
+              activeOpacity={0.7}
+              onPress={() => handleSelect(item, unlocked)}
+            >
+              <View style={[styles.rowAccent, { backgroundColor: unlocked ? COLORS.accent : COLORS.line }]} />
+              <View style={styles.rowContent}>
+                <Text style={styles.rowTitle}>{item.name}</Text>
+                <Text style={styles.rowDifficulty}>
+                  {unlocked ? `Zorluk: ${item.difficulty_level}/10` : "Ön koşul gerekiyor"}
+                </Text>
+              </View>
+              <Feather
+                name={unlocked ? "plus-circle" : "lock"}
+                size={unlocked ? 22 : 18}
+                color={unlocked ? COLORS.accent : COLORS.graphite}
+              />
+            </TouchableOpacity>
+          );
+        }}
         ListEmptyComponent={
           <Text style={styles.emptyText}>
             {normalize(query).length >= MIN_QUERY_LENGTH
@@ -186,10 +220,10 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
+  rowLocked: { opacity: 0.6 },
   rowAccent: {
     width: 4,
     height: 24,
-    backgroundColor: COLORS.accent,
     borderTopRightRadius: 4,
     borderBottomRightRadius: 4,
     marginRight: 14,

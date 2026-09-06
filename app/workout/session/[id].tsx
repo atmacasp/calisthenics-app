@@ -1,11 +1,27 @@
+
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert } from "react-native";
 import { useEffect, useState, useRef } from "react";
 import { router, useLocalSearchParams, Stack } from "expo-router";
 import { useAuthStore } from "../../../src/store/authStore";
 import { useWorkoutStore } from "../../../src/store/workoutStore";
 import { workoutService } from "../../../src/services/workout.service";
+import { progressService } from "../../../src/services/progress.service";
+import { COLORS } from "../../../src/constants/theme";
 
 const REST_SECONDS = 60;
+
+interface PersonalBest {
+  maxReps: number;
+  maxDuration: number;
+  maxWeight: number;
+}
+
+interface SessionSet {
+  id: string;
+  reps?: number;
+  duration_seconds?: number;
+  added_weight_kg?: number;
+}
 
 function sanitizeInteger(text: string) {
   return text.replace(/[^0-9]/g, "");
@@ -20,6 +36,39 @@ function sanitizeDecimal(text: string) {
   return cleaned;
 }
 
+/**
+ * Bir hareketin bu antrenmandaki setlerini, antrenman öncesi kişisel rekorla
+ * (baseline) karşılaştırarak sırayla tarar. Her metrik (tekrar/süre/ek kg) için
+ * SADECE o metrikte hâlâ en yüksek değeri tutan TEK seti "rekor sahibi" işaretler.
+ * Böylece bir set öncekini geçtiğinde rozet otomatik olarak yeni sete kayar,
+ * aynı anda birden fazla set "Yeni Rekor!" göstermez.
+ */
+function computeRecordHolderIds(sets: SessionSet[], baseline: PersonalBest): Set<string> {
+  let bestReps = baseline.maxReps;
+  let repsHolder: string | null = null;
+  let bestDuration = baseline.maxDuration;
+  let durationHolder: string | null = null;
+  let bestWeight = baseline.maxWeight;
+  let weightHolder: string | null = null;
+
+  for (const s of sets) {
+    if (s.reps != null && s.reps > bestReps) {
+      bestReps = s.reps;
+      repsHolder = s.id;
+    }
+    if (s.duration_seconds != null && s.duration_seconds > bestDuration) {
+      bestDuration = s.duration_seconds;
+      durationHolder = s.id;
+    }
+    if (s.added_weight_kg != null && s.added_weight_kg > bestWeight) {
+      bestWeight = s.added_weight_kg;
+      weightHolder = s.id;
+    }
+  }
+
+  return new Set([repsHolder, durationHolder, weightHolder].filter((x): x is string => !!x));
+}
+
 export default function WorkoutSessionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const authSession = useAuthStore((s) => s.session);
@@ -29,6 +78,10 @@ export default function WorkoutSessionScreen() {
 
   const [inputs, setInputs] = useState<Record<string, { reps: string; duration: string; weight: string }>>({});
   const [restLeft, setRestLeft] = useState(0);
+  // Bu antrenman BAŞLAMADAN ÖNCEKİ kişisel rekorlar - antrenman süresince
+  // değişmez, "hâlâ kimin en iyi olduğu" her render'da bu referansla yeniden
+  // hesaplanır (bkz. computeRecordHolderIds).
+  const [personalBests, setPersonalBests] = useState<Record<string, PersonalBest>>({});
   const intervalRef = useRef<any>(null);
 
   useEffect(() => {
@@ -39,6 +92,17 @@ export default function WorkoutSessionScreen() {
     intervalRef.current = setInterval(() => setRestLeft((s) => s - 1), 1000);
     return () => clearInterval(intervalRef.current);
   }, [restLeft > 0]);
+
+  useEffect(() => {
+    if (!authSession) return;
+    progressService.getPersonalRecords(authSession.user.id).then((records) => {
+      const map: Record<string, PersonalBest> = {};
+      records.forEach((r) => {
+        map[r.movementId] = { maxReps: r.maxReps, maxDuration: r.maxDuration, maxWeight: r.maxWeight };
+      });
+      setPersonalBests(map);
+    });
+  }, [authSession]);
 
   const updateInput = (movementId: string, field: "reps" | "duration" | "weight", rawValue: string) => {
     const value =
@@ -117,49 +181,60 @@ export default function WorkoutSessionScreen() {
         </View>
       )}
 
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
         {sessionMovements.length === 0 && (
           <Text style={styles.emptyText}>Henüz hareket eklenmedi. Aşağıdan bir hareket ekle.</Text>
         )}
 
-        {sessionMovements.map((movement) => (
-          <View key={movement.movementId} style={styles.card}>
-            <Text style={styles.cardTitle}>{movement.name}</Text>
+        {sessionMovements.map((movement) => {
+          const baseline = personalBests[movement.movementId] ?? { maxReps: 0, maxDuration: 0, maxWeight: 0 };
+          const recordHolderIds = computeRecordHolderIds(movement.sets, baseline);
 
-            {movement.sets.map((s, i) => (
-              <Text key={s.id} style={styles.setLine}>
-                Set {i + 1}: {s.reps ? `${s.reps} tekrar` : ""} {s.duration_seconds ? `${s.duration_seconds} sn` : ""} {s.added_weight_kg ? `+${s.added_weight_kg}kg` : ""}
-              </Text>
-            ))}
+          return (
+            <View key={movement.movementId} style={styles.card}>
+              <Text style={styles.cardTitle}>{movement.name}</Text>
 
-            <View style={styles.inputRow}>
-              <TextInput
-                style={styles.smallInput}
-                placeholder="Tekrar"
-                keyboardType="number-pad"
-                value={inputs[movement.movementId]?.reps ?? ""}
-                onChangeText={(v) => updateInput(movement.movementId, "reps", v)}
-              />
-              <TextInput
-                style={styles.smallInput}
-                placeholder="Süre (sn)"
-                keyboardType="number-pad"
-                value={inputs[movement.movementId]?.duration ?? ""}
-                onChangeText={(v) => updateInput(movement.movementId, "duration", v)}
-              />
-              <TextInput
-                style={styles.smallInput}
-                placeholder="Ek kg"
-                keyboardType="decimal-pad"
-                value={inputs[movement.movementId]?.weight ?? ""}
-                onChangeText={(v) => updateInput(movement.movementId, "weight", v)}
-              />
+              {movement.sets.map((s, i) => (
+                <View key={s.id} style={styles.setLineRow}>
+                  <Text style={styles.setLine}>
+                    Set {i + 1}: {s.reps ? `${s.reps} tekrar` : ""} {s.duration_seconds ? `${s.duration_seconds} sn` : ""} {s.added_weight_kg ? `+${s.added_weight_kg}kg` : ""}
+                  </Text>
+                  {recordHolderIds.has(s.id) && <Text style={styles.prBadge}>🏆 Yeni Rekor!</Text>}
+                </View>
+              ))}
+
+              <View style={styles.inputRow}>
+                <TextInput
+                  style={styles.smallInput}
+                  placeholder="Tekrar"
+                  placeholderTextColor={COLORS.graphite}
+                  keyboardType="number-pad"
+                  value={inputs[movement.movementId]?.reps ?? ""}
+                  onChangeText={(v) => updateInput(movement.movementId, "reps", v)}
+                />
+                <TextInput
+                  style={styles.smallInput}
+                  placeholder="Süre (sn)"
+                  placeholderTextColor={COLORS.graphite}
+                  keyboardType="number-pad"
+                  value={inputs[movement.movementId]?.duration ?? ""}
+                  onChangeText={(v) => updateInput(movement.movementId, "duration", v)}
+                />
+                <TextInput
+                  style={styles.smallInput}
+                  placeholder="Ek kg"
+                  placeholderTextColor={COLORS.graphite}
+                  keyboardType="decimal-pad"
+                  value={inputs[movement.movementId]?.weight ?? ""}
+                  onChangeText={(v) => updateInput(movement.movementId, "weight", v)}
+                />
+              </View>
+              <TouchableOpacity style={styles.saveButton} onPress={() => saveSet(movement.movementId)}>
+                <Text style={styles.saveButtonText}>Seti Kaydet</Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity style={styles.saveButton} onPress={() => saveSet(movement.movementId)}>
-              <Text style={styles.saveButtonText}>Seti Kaydet</Text>
-            </TouchableOpacity>
-          </View>
-        ))}
+          );
+        })}
 
         <TouchableOpacity style={styles.addButton} onPress={() => router.push("/workout/pick-movement")}>
           <Text style={styles.addButtonText}>+ Hareket Ekle</Text>
@@ -174,20 +249,60 @@ export default function WorkoutSessionScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  restBanner: { backgroundColor: "#111827", padding: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  restText: { color: "white", fontWeight: "700" },
-  skipText: { color: "#22c55e", fontWeight: "600" },
-  emptyText: { textAlign: "center", color: "#9ca3af", marginTop: 24 },
-  card: { backgroundColor: "#f3f4f6", borderRadius: 12, padding: 16, marginBottom: 16 },
-  cardTitle: { fontSize: 18, fontWeight: "700", marginBottom: 8 },
-  setLine: { fontSize: 13, color: "#374151", marginBottom: 2 },
+  container: { flex: 1, backgroundColor: COLORS.paper },
+  scrollContent: { padding: 16, paddingBottom: 32 },
+  restBanner: {
+    backgroundColor: COLORS.ink,
+    padding: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  restText: { color: COLORS.white, fontFamily: "Inter_700Bold", fontSize: 14 },
+  skipText: { color: COLORS.accent, fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  emptyText: {
+    textAlign: "center",
+    color: COLORS.graphite,
+    fontFamily: "Inter_400Regular",
+    marginTop: 24,
+  },
+  card: {
+    backgroundColor: COLORS.white,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: COLORS.ink,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cardTitle: { fontFamily: "Inter_700Bold", fontSize: 17, color: COLORS.ink, marginBottom: 8 },
+  setLineRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
+  setLine: { fontFamily: "Inter_400Regular", fontSize: 13, color: COLORS.graphite },
+  prBadge: { fontFamily: "Inter_700Bold", fontSize: 12, color: COLORS.accent },
   inputRow: { flexDirection: "row", gap: 8, marginTop: 8 },
-  smallInput: { flex: 1, borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, padding: 8, backgroundColor: "white" },
-  saveButton: { backgroundColor: "#22c55e", padding: 10, borderRadius: 8, marginTop: 10 },
-  saveButtonText: { color: "white", textAlign: "center", fontWeight: "600" },
-  addButton: { borderWidth: 1, borderColor: "#22c55e", borderStyle: "dashed", padding: 14, borderRadius: 8, alignItems: "center" },
-  addButtonText: { color: "#22c55e", fontWeight: "700" },
-  finishButton: { backgroundColor: "#111827", padding: 18 },
-  finishButtonText: { color: "white", textAlign: "center", fontWeight: "700", fontSize: 16 },
+  smallInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    borderRadius: 8,
+    padding: 8,
+    backgroundColor: COLORS.paper,
+    color: COLORS.ink,
+    fontFamily: "Inter_400Regular",
+  },
+  saveButton: { backgroundColor: COLORS.accent, padding: 12, borderRadius: 10, marginTop: 10 },
+  saveButtonText: { color: COLORS.white, textAlign: "center", fontFamily: "Inter_700Bold", fontSize: 14 },
+  addButton: {
+    borderWidth: 1,
+    borderColor: COLORS.accent,
+    borderStyle: "dashed",
+    padding: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  addButtonText: { color: COLORS.accent, fontFamily: "Inter_700Bold", fontSize: 14 },
+  finishButton: { backgroundColor: COLORS.ink, padding: 18 },
+  finishButtonText: { color: COLORS.white, textAlign: "center", fontFamily: "Inter_700Bold", fontSize: 16 },
 });

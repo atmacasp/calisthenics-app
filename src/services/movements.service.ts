@@ -1,9 +1,9 @@
 
 import { supabase } from "../lib/supabase";
 import type {
-  MovementFlatItem,
   MovementGroupRow,
   MovementListItem,
+  MovementWithGroupAndPrerequisites,
   MovementWithPrerequisites,
 } from "../types/movements";
 
@@ -67,18 +67,25 @@ export const movementsService = {
   },
 
   /**
-   * Hareket Seç ekranı için düz liste. Önce kategorinin kendi order_index'ine
-   * (Temel Güç -> Handstand -> ... -> Planche), sonra kategorinin içinde
-   * basamağın kendi order_index'ine göre sıralanır - böylece ekranda hem
-   * kategoriler hem de her zincirin basamakları mantıklı sırada görünür.
+   * Hareket Seç ekranındaki kilit kontrolü ve "Bugün Sırada" öneri motoru için
+   * TEK sorguda tüm hareketleri, kategorileriyle ve prerequisites'leriyle birlikte
+   * döner (kategori order_index -> basamak order_index sırasıyla). 7 kategori için
+   * ayrı ayrı getMovementsByGroup çağırmak yerine tek istek atılır.
    */
-  async getAllMovementsFlat(): Promise<MovementFlatItem[]> {
+  async getAllMovementsWithPrerequisites(): Promise<MovementWithGroupAndPrerequisites[]> {
     const { data, error } = await supabase
       .from("movements")
-      .select("id, name, order_index, difficulty_level, movement_groups(name, order_index)")
+      .select(
+        `
+        *,
+        movement_groups(name, order_index),
+        prerequisites:movement_prerequisites!movement_prerequisites_movement_id_fkey(${PREREQUISITE_SELECT})
+      `
+      )
       .order("order_index", { referencedTable: "movement_groups", ascending: true })
-      .order("order_index", { ascending: true });
+      .order("order_index", { ascending: true })
+      .order("order_index", { referencedTable: "movement_prerequisites", ascending: true });
     if (error) throw error;
-    return (data ?? []) as unknown as MovementFlatItem[];
+    return (data ?? []) as unknown as MovementWithGroupAndPrerequisites[];
   },
 };

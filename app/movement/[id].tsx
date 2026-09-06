@@ -5,28 +5,22 @@ import { useLocalSearchParams, Stack, router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { movementsService } from "../../src/services/movements.service";
 import { progressService } from "../../src/services/progress.service";
+import { workoutService } from "../../src/services/workout.service";
 import { useAuthStore } from "../../src/store/authStore";
+import { useWorkoutStore } from "../../src/store/workoutStore";
 import { COLORS } from "../../src/constants/theme";
-import type { MovementWithPrerequisites, MovementSetLogMap, TargetSpec } from "../../src/types/movements";
-import { getPrerequisiteTarget, isPrerequisiteMet } from "../../src/utils/targetProgress";
-
-function formatTarget(t: TargetSpec | null | undefined) {
-  if (!t?.target_type) return null;
-  if (t.target_type === "reps_sets" && t.target_sets && t.target_reps) {
-    return `${t.target_sets} set x ${t.target_reps} tekrar`;
-  }
-  if (t.target_type === "duration" && t.target_duration_seconds) {
-    return `${t.target_duration_seconds} saniye tutuş`;
-  }
-  return null;
-}
+import type { MovementWithPrerequisites, MovementSetLogMap } from "../../src/types/movements";
+import { areAllPrerequisitesMet, formatTarget, getPrerequisiteTarget, isPrerequisiteMet } from "../../src/utils/targetProgress";
 
 export default function MovementDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const userId = useAuthStore((s) => s.session?.user.id);
+  const startSession = useWorkoutStore((s) => s.startSession);
+  const addMovement = useWorkoutStore((s) => s.addMovement);
   const [movement, setMovement] = useState<MovementWithPrerequisites | null>(null);
   const [setLogMap, setSetLogMap] = useState<MovementSetLogMap>({});
   const [loading, setLoading] = useState(true);
+  const [starting, setStarting] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -64,6 +58,20 @@ export default function MovementDetailScreen() {
   const prerequisites = movement.prerequisites ?? [];
   const metCount = prerequisites.filter((p) => isPrerequisiteMet(p, setLogMap)).length;
   const allMet = prerequisites.length === 0 || metCount === prerequisites.length;
+  const movementLocked = !areAllPrerequisitesMet(prerequisites, setLogMap);
+
+  const handleQuickStart = async () => {
+    if (!userId || movementLocked || starting) return;
+    setStarting(true);
+    try {
+      const newSession = await workoutService.startSession(userId);
+      startSession(newSession.id);
+      addMovement({ id: movement.id, name: movement.name });
+      router.push(`/workout/session/${newSession.id}`);
+    } finally {
+      setStarting(false);
+    }
+  };
 
   return (
     <ScrollView style={styles.container}>
@@ -91,6 +99,24 @@ export default function MovementDetailScreen() {
           </View>
         )}
 
+        <TouchableOpacity
+          style={[styles.quickStartButton, movementLocked && styles.quickStartButtonDisabled]}
+          activeOpacity={0.85}
+          disabled={movementLocked || starting}
+          onPress={handleQuickStart}
+        >
+          {starting ? (
+            <ActivityIndicator size="small" color={COLORS.white} />
+          ) : (
+            <>
+              <Feather name={movementLocked ? "lock" : "play"} size={18} color={movementLocked ? COLORS.graphite : COLORS.white} />
+              <Text style={[styles.quickStartText, movementLocked && styles.quickStartTextDisabled]}>
+                {movementLocked ? "Önce ön koşulları tamamla" : "Bu Hareketle Antrenman Başlat"}
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
+
         {prerequisites.length > 0 && (
           <View style={styles.prereqSection}>
             <View style={styles.prereqHeaderRow}>
@@ -102,7 +128,7 @@ export default function MovementDetailScreen() {
                 </Text>
               </View>
             </View>
-            <Text style={styles.prereqHint}>Detayını görmek için bir hareketin üzerine dokun</Text>
+            <Text style={styles.prereqHint}>Detayını görmek ve hemen çalışmak için bir hareketin üzerine dokun</Text>
             {prerequisites.map((p) => {
               const pm = p.prerequisite_movement;
               const overrideTarget = formatTarget(getPrerequisiteTarget(p));
@@ -196,7 +222,20 @@ const styles = StyleSheet.create({
   },
   targetValue: { fontFamily: "Inter_700Bold", fontSize: 18, color: COLORS.ink },
   targetNote: { fontFamily: "Inter_400Regular", fontSize: 13, color: COLORS.graphite, marginTop: 6 },
-  prereqSection: { marginTop: 24 },
+  quickStartButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: COLORS.accent,
+    borderRadius: 14,
+    paddingVertical: 14,
+    marginTop: 16,
+  },
+  quickStartButtonDisabled: { backgroundColor: COLORS.line },
+  quickStartText: { fontFamily: "Inter_700Bold", fontSize: 15, color: COLORS.white },
+  quickStartTextDisabled: { color: COLORS.graphite },
+  prereqSection: { marginTop: 28 },
   prereqHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   prereqTitle: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.ink },
   statusPill: {
