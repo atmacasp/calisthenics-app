@@ -32,6 +32,8 @@ export default function PickMovementScreen() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const addMovement = useWorkoutStore((s) => s.addMovement);
+  const sessionMovements = useWorkoutStore((s) => s.sessionMovements);
+  const addedIds = useMemo(() => new Set(sessionMovements.map((m) => m.movementId)), [sessionMovements]);
 
   const loadData = useCallback(() => {
     if (!userId) return;
@@ -67,12 +69,22 @@ export default function PickMovementScreen() {
     return Object.entries(grouped).map(([title, data]) => ({ title, data }));
   }, [movements, query]);
 
-  const handleSelect = (movement: MovementWithGroupAndPrerequisites, unlocked: boolean) => {
+  const handleSelect = (movement: MovementWithGroupAndPrerequisites, unlocked: boolean, alreadyAdded: boolean) => {
     if (!unlocked) {
       router.push(`/movement/${movement.id}`);
       return;
     }
-    addMovement({ id: movement.id, name: movement.name });
+    if (!alreadyAdded) {
+      addMovement({
+        id: movement.id,
+        name: movement.name,
+        groupName: movement.movement_groups?.name,
+        targetType: movement.target_type,
+        targetSets: movement.target_sets,
+        targetReps: movement.target_reps,
+        targetDurationSeconds: movement.target_duration_seconds,
+      });
+    }
     router.back();
   };
 
@@ -124,23 +136,28 @@ export default function PickMovementScreen() {
         )}
         renderItem={({ item }) => {
           const unlocked = areAllPrerequisitesMet(item.prerequisites ?? [], setLogMap);
+          const alreadyAdded = addedIds.has(item.id);
           return (
             <TouchableOpacity
               style={[styles.row, !unlocked && styles.rowLocked]}
               activeOpacity={0.7}
-              onPress={() => handleSelect(item, unlocked)}
+              onPress={() => handleSelect(item, unlocked, alreadyAdded)}
             >
               <View style={[styles.rowAccent, { backgroundColor: unlocked ? COLORS.accent : COLORS.line }]} />
               <View style={styles.rowContent}>
                 <Text style={styles.rowTitle}>{item.name}</Text>
-                <Text style={styles.rowDifficulty}>
-                  {unlocked ? `Zorluk: ${item.difficulty_level}/10` : "Ön koşul gerekiyor"}
+                <Text style={[styles.rowDifficulty, alreadyAdded && styles.rowAddedText]}>
+                  {!unlocked
+                    ? "Ön koşul gerekiyor"
+                    : alreadyAdded
+                    ? "✓ Antrenmana eklendi"
+                    : `Zorluk: ${item.difficulty_level}/10`}
                 </Text>
               </View>
               <Feather
-                name={unlocked ? "plus-circle" : "lock"}
-                size={unlocked ? 22 : 18}
-                color={unlocked ? COLORS.accent : COLORS.graphite}
+                name={!unlocked ? "lock" : alreadyAdded ? "check-circle" : "plus-circle"}
+                size={!unlocked ? 18 : 22}
+                color={!unlocked ? COLORS.graphite : COLORS.accent}
               />
             </TouchableOpacity>
           );
@@ -239,6 +256,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.graphite,
     marginTop: 2,
+  },
+  rowAddedText: {
+    color: COLORS.accent,
+    fontFamily: "Inter_600SemiBold",
   },
   emptyText: {
     textAlign: "center",

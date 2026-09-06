@@ -66,7 +66,15 @@ export default function MovementDetailScreen() {
     try {
       const newSession = await workoutService.startSession(userId);
       startSession(newSession.id);
-      addMovement({ id: movement.id, name: movement.name });
+      addMovement({
+        id: movement.id,
+        name: movement.name,
+        groupName: movement.movement_groups?.name,
+        targetType: movement.target_type,
+        targetSets: movement.target_sets,
+        targetReps: movement.target_reps,
+        targetDurationSeconds: movement.target_duration_seconds,
+      });
       router.push(`/workout/session/${newSession.id}`);
     } finally {
       setStarting(false);

@@ -2,11 +2,13 @@
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert } from "react-native";
 import { useEffect, useState, useRef } from "react";
 import { router, useLocalSearchParams, Stack } from "expo-router";
+import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../../src/store/authStore";
 import { useWorkoutStore } from "../../../src/store/workoutStore";
 import { workoutService } from "../../../src/services/workout.service";
 import { progressService } from "../../../src/services/progress.service";
 import { COLORS } from "../../../src/constants/theme";
+import { formatTarget } from "../../../src/utils/targetProgress";
 
 const REST_SECONDS = 60;
 
@@ -69,15 +71,33 @@ function computeRecordHolderIds(sets: SessionSet[], baseline: PersonalBest): Set
   return new Set([repsHolder, durationHolder, weightHolder].filter((x): x is string => !!x));
 }
 
+/** Bir setin, hareketin KENDİ hedefini karşılayıp karşılamadığını (anlık, tek set bazlı) kontrol eder. */
+function setMeetsOwnTarget(
+  s: SessionSet,
+  targetType: "reps_sets" | "duration" | null | undefined,
+  targetReps: number | null | undefined,
+  targetDurationSeconds: number | null | undefined
+): boolean {
+  if (targetType === "duration" && targetDurationSeconds) {
+    return (s.duration_seconds ?? 0) >= targetDurationSeconds;
+  }
+  if (targetType === "reps_sets" && targetReps) {
+    return (s.reps ?? 0) >= targetReps;
+  }
+  return false;
+}
+
 export default function WorkoutSessionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const authSession = useAuthStore((s) => s.session);
   const sessionMovements = useWorkoutStore((s) => s.sessionMovements);
   const addSetToMovement = useWorkoutStore((s) => s.addSetToMovement);
+  const removeMovement = useWorkoutStore((s) => s.removeMovement);
   const reset = useWorkoutStore((s) => s.reset);
 
   const [inputs, setInputs] = useState<Record<string, { reps: string; duration: string; weight: string }>>({});
   const [restLeft, setRestLeft] = useState(0);
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   // Bu antrenman BAŞLAMADAN ÖNCEKİ kişisel rekorlar - antrenman süresince
   // değişmez, "hâlâ kimin en iyi olduğu" her render'da bu referansla yeniden
   // hesaplanır (bkz. computeRecordHolderIds).
@@ -104,13 +124,46 @@ export default function WorkoutSessionScreen() {
     });
   }, [authSession]);
 
+  const toggleCollapsed = (movementId: string) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(movementId)) next.delete(movementId);
+      else next.add(movementId);
+      return next;
+    });
+  };
+
   const updateInput = (movementId: string, field: "reps" | "duration" | "weight", rawValue: string) => {
-    const value =
-      field === "weight" ? sanitizeDecimal(rawValue) : sanitizeInteger(rawValue);
+    const value = field === "weight" ? sanitizeDecimal(rawValue) : sanitizeInteger(rawValue);
     setInputs((prev) => ({ ...prev, [movementId]: { ...prev[movementId], [field]: value } }));
   };
 
   const totalLoggedSets = sessionMovements.reduce((sum, m) => sum + m.sets.length, 0);
+
+  const handleRemoveMovement = (movementId: string, name: string, setCount: number) => {
+    const message =
+      setCount > 0
+        ? `"${name}" hareketini ve kayıtlı ${setCount} setini bu antrenmandan silmek istediğine emin misin?`
+        : `"${name}" hareketini bu antrenmandan silmek istediğine emin misin?`;
+
+    Alert.alert("Hareketi Sil", message, [
+      { text: "Vazgeç", style: "cancel" },
+      {
+        text: "Sil",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            if (setCount > 0 && id) {
+              await workoutService.removeMovementSets(id, movementId);
+            }
+            removeMovement(movementId);
+          } catch (error: any) {
+            Alert.alert("Hata", error.message ?? "Hareket silinemedi");
+          }
+        },
+      },
+    ]);
+  };
 
   const saveSet = async (movementId: string) => {
     const values = inputs[movementId] || { reps: "", duration: "", weight: "" };
@@ -152,10 +205,7 @@ export default function WorkoutSessionScreen() {
     if (!id || !authSession) return;
 
     if (totalLoggedSets === 0) {
-      Alert.alert(
-        "Henüz set kaydedilmedi",
-        "Antrenmanı bitirmeden önce en az bir set kaydetmelisin.",
-      );
+      Alert.alert("Henüz set kaydedilmedi", "Antrenmanı bitirmeden önce en az bir set kaydetmelisin.");
       return;
     }
 
@@ -183,55 +233,120 @@ export default function WorkoutSessionScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {sessionMovements.length === 0 && (
-          <Text style={styles.emptyText}>Henüz hareket eklenmedi. Aşağıdan bir hareket ekle.</Text>
+          <View style={styles.emptyBox}>
+            <Feather name="activity" size={28} color={COLORS.line} />
+            <Text style={styles.emptyText}>Henüz hareket eklenmedi. Aşağıdan bir hareket ekle.</Text>
+          </View>
         )}
 
         {sessionMovements.map((movement) => {
           const baseline = personalBests[movement.movementId] ?? { maxReps: 0, maxDuration: 0, maxWeight: 0 };
           const recordHolderIds = computeRecordHolderIds(movement.sets, baseline);
+          const targetText = formatTarget({
+            target_type: movement.targetType ?? null,
+            target_sets: movement.targetSets ?? null,
+            target_reps: movement.targetReps ?? null,
+            target_duration_seconds: movement.targetDurationSeconds ?? null,
+          });
+          const collapsed = collapsedIds.has(movement.movementId);
+          const showDuration = movement.targetType !== "reps_sets";
+          const showReps = movement.targetType !== "duration";
 
           return (
             <View key={movement.movementId} style={styles.card}>
-              <Text style={styles.cardTitle}>{movement.name}</Text>
-
-              {movement.sets.map((s, i) => (
-                <View key={s.id} style={styles.setLineRow}>
-                  <Text style={styles.setLine}>
-                    Set {i + 1}: {s.reps ? `${s.reps} tekrar` : ""} {s.duration_seconds ? `${s.duration_seconds} sn` : ""} {s.added_weight_kg ? `+${s.added_weight_kg}kg` : ""}
-                  </Text>
-                  {recordHolderIds.has(s.id) && <Text style={styles.prBadge}>🏆 Yeni Rekor!</Text>}
+              <TouchableOpacity
+                style={styles.cardHeaderRow}
+                activeOpacity={0.7}
+                onPress={() => toggleCollapsed(movement.movementId)}
+              >
+                <Feather
+                  name={collapsed ? "chevron-right" : "chevron-down"}
+                  size={18}
+                  color={COLORS.graphite}
+                  style={{ marginRight: 8 }}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardTitle}>{movement.name}</Text>
+                  {movement.groupName && <Text style={styles.cardCategory}>{movement.groupName}</Text>}
                 </View>
-              ))}
-
-              <View style={styles.inputRow}>
-                <TextInput
-                  style={styles.smallInput}
-                  placeholder="Tekrar"
-                  placeholderTextColor={COLORS.graphite}
-                  keyboardType="number-pad"
-                  value={inputs[movement.movementId]?.reps ?? ""}
-                  onChangeText={(v) => updateInput(movement.movementId, "reps", v)}
-                />
-                <TextInput
-                  style={styles.smallInput}
-                  placeholder="Süre (sn)"
-                  placeholderTextColor={COLORS.graphite}
-                  keyboardType="number-pad"
-                  value={inputs[movement.movementId]?.duration ?? ""}
-                  onChangeText={(v) => updateInput(movement.movementId, "duration", v)}
-                />
-                <TextInput
-                  style={styles.smallInput}
-                  placeholder="Ek kg"
-                  placeholderTextColor={COLORS.graphite}
-                  keyboardType="decimal-pad"
-                  value={inputs[movement.movementId]?.weight ?? ""}
-                  onChangeText={(v) => updateInput(movement.movementId, "weight", v)}
-                />
-              </View>
-              <TouchableOpacity style={styles.saveButton} onPress={() => saveSet(movement.movementId)}>
-                <Text style={styles.saveButtonText}>Seti Kaydet</Text>
+                {collapsed && (
+                  <Text style={styles.collapsedSummary}>
+                    {movement.sets.length > 0 ? `${movement.sets.length} set` : "Henüz set yok"}
+                  </Text>
+                )}
+                <TouchableOpacity
+                  hitSlop={10}
+                  style={{ marginLeft: 12 }}
+                  onPress={() => handleRemoveMovement(movement.movementId, movement.name, movement.sets.length)}
+                >
+                  <Feather name="trash-2" size={18} color={COLORS.graphite} />
+                </TouchableOpacity>
               </TouchableOpacity>
+
+              {!collapsed && (
+                <>
+                  {targetText && (
+                    <View style={styles.targetChip}>
+                      <Feather name="target" size={12} color={COLORS.accent} />
+                      <Text style={styles.targetChipText}>Hedef: {targetText}</Text>
+                    </View>
+                  )}
+
+                  {movement.sets.map((s, i) => {
+                    const metTarget = setMeetsOwnTarget(
+                      s,
+                      movement.targetType,
+                      movement.targetReps,
+                      movement.targetDurationSeconds
+                    );
+                    return (
+                      <View key={s.id} style={styles.setLineRow}>
+                        <Text style={styles.setLine}>
+                          Set {i + 1}: {s.reps ? `${s.reps} tekrar` : ""} {s.duration_seconds ? `${s.duration_seconds} sn` : ""} {s.added_weight_kg ? `+${s.added_weight_kg}kg` : ""}
+                        </Text>
+                        <View style={styles.setBadges}>
+                          {metTarget && <Text style={styles.targetMetBadge}>✓ Hedef</Text>}
+                          {recordHolderIds.has(s.id) && <Text style={styles.prBadge}>🏆 Yeni Rekor!</Text>}
+                        </View>
+                      </View>
+                    );
+                  })}
+
+                  <View style={styles.inputRow}>
+                    {showReps && (
+                      <TextInput
+                        style={styles.smallInput}
+                        placeholder="Tekrar"
+                        placeholderTextColor={COLORS.graphite}
+                        keyboardType="number-pad"
+                        value={inputs[movement.movementId]?.reps ?? ""}
+                        onChangeText={(v) => updateInput(movement.movementId, "reps", v)}
+                      />
+                    )}
+                    {showDuration && (
+                      <TextInput
+                        style={styles.smallInput}
+                        placeholder="Süre (sn)"
+                        placeholderTextColor={COLORS.graphite}
+                        keyboardType="number-pad"
+                        value={inputs[movement.movementId]?.duration ?? ""}
+                        onChangeText={(v) => updateInput(movement.movementId, "duration", v)}
+                      />
+                    )}
+                    <TextInput
+                      style={styles.smallInput}
+                      placeholder="Ek kg"
+                      placeholderTextColor={COLORS.graphite}
+                      keyboardType="decimal-pad"
+                      value={inputs[movement.movementId]?.weight ?? ""}
+                      onChangeText={(v) => updateInput(movement.movementId, "weight", v)}
+                    />
+                  </View>
+                  <TouchableOpacity style={styles.saveButton} onPress={() => saveSet(movement.movementId)}>
+                    <Text style={styles.saveButtonText}>Seti Kaydet</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           );
         })}
@@ -260,11 +375,11 @@ const styles = StyleSheet.create({
   },
   restText: { color: COLORS.white, fontFamily: "Inter_700Bold", fontSize: 14 },
   skipText: { color: COLORS.accent, fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  emptyBox: { alignItems: "center", marginTop: 40, gap: 10 },
   emptyText: {
     textAlign: "center",
     color: COLORS.graphite,
     fontFamily: "Inter_400Regular",
-    marginTop: 24,
   },
   card: {
     backgroundColor: COLORS.white,
@@ -277,9 +392,27 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  cardTitle: { fontFamily: "Inter_700Bold", fontSize: 17, color: COLORS.ink, marginBottom: 8 },
+  cardHeaderRow: { flexDirection: "row", alignItems: "center" },
+  cardTitle: { fontFamily: "Inter_700Bold", fontSize: 17, color: COLORS.ink },
+  cardCategory: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, marginTop: 1 },
+  collapsedSummary: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: COLORS.graphite },
+  targetChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(34, 197, 94, 0.1)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  targetChipText: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: COLORS.accent },
   setLineRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
   setLine: { fontFamily: "Inter_400Regular", fontSize: 13, color: COLORS.graphite },
+  setBadges: { flexDirection: "row", alignItems: "center", gap: 8 },
+  targetMetBadge: { fontFamily: "Inter_700Bold", fontSize: 11, color: COLORS.graphite },
   prBadge: { fontFamily: "Inter_700Bold", fontSize: 12, color: COLORS.accent },
   inputRow: { flexDirection: "row", gap: 8, marginTop: 8 },
   smallInput: {
