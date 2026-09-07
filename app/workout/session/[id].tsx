@@ -6,6 +6,7 @@ import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../../src/store/authStore";
 import { useWorkoutStore } from "../../../src/store/workoutStore";
 import { workoutService } from "../../../src/services/workout.service";
+import { workoutsService } from "../../../src/services/workouts.service";
 import { progressService } from "../../../src/services/progress.service";
 import { COLORS } from "../../../src/constants/theme";
 import { formatTarget } from "../../../src/utils/targetProgress";
@@ -98,6 +99,7 @@ export default function WorkoutSessionScreen() {
   const [inputs, setInputs] = useState<Record<string, { reps: string; duration: string; weight: string }>>({});
   const [restLeft, setRestLeft] = useState(0);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+  const [notes, setNotes] = useState("");
   // Bu antrenman BAŞLAMADAN ÖNCEKİ kişisel rekorlar - antrenman süresince
   // değişmez, "hâlâ kimin en iyi olduğu" her render'da bu referansla yeniden
   // hesaplanır (bkz. computeRecordHolderIds).
@@ -210,6 +212,9 @@ export default function WorkoutSessionScreen() {
     }
 
     try {
+      if (notes.trim()) {
+        await workoutsService.updateSessionNotes(id, notes.trim());
+      }
       await workoutService.endSession(id, authSession.user.id);
       reset();
       router.replace("/(tabs)/workout");
@@ -354,6 +359,20 @@ export default function WorkoutSessionScreen() {
         <TouchableOpacity style={styles.addButton} onPress={() => router.push("/workout/pick-movement")}>
           <Text style={styles.addButtonText}>+ Hareket Ekle</Text>
         </TouchableOpacity>
+
+        {sessionMovements.length > 0 && (
+          <View style={styles.notesBox}>
+            <Text style={styles.notesLabel}>Antrenman Notu (opsiyonel)</Text>
+            <TextInput
+              style={styles.notesInput}
+              placeholder="Bugün nasıl geçti?"
+              placeholderTextColor={COLORS.graphite}
+              multiline
+              value={notes}
+              onChangeText={setNotes}
+            />
+          </View>
+        )}
       </ScrollView>
 
       <TouchableOpacity style={styles.finishButton} onPress={finishWorkout}>
@@ -436,6 +455,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   addButtonText: { color: COLORS.accent, fontFamily: "Inter_700Bold", fontSize: 14 },
+  notesBox: { marginTop: 20 },
+  notesLabel: { fontFamily: "Inter_700Bold", fontSize: 13, color: COLORS.ink, marginBottom: 8 },
+  notesInput: {
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    borderRadius: 12,
+    padding: 14,
+    minHeight: 70,
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    color: COLORS.ink,
+    textAlignVertical: "top",
+  },
   finishButton: { backgroundColor: COLORS.ink, padding: 18 },
   finishButtonText: { color: COLORS.white, textAlign: "center", fontFamily: "Inter_700Bold", fontSize: 16 },
 });

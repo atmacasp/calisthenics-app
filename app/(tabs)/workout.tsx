@@ -83,6 +83,25 @@ export default function WorkoutScreen() {
         <Text style={styles.primaryButtonText}>Antrenman Başlat</Text>
       </TouchableOpacity>
 
+      <View style={styles.linksRow}>
+        <TouchableOpacity
+          style={styles.historyLink}
+          activeOpacity={0.7}
+          onPress={() => router.push("/workout/history")}
+        >
+          <Feather name="clock" size={16} color={COLORS.graphite} />
+          <Text style={styles.historyLinkText}>Geçmiş Antrenmanlarım</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.historyLink}
+          activeOpacity={0.7}
+          onPress={() => router.push("/programs")}
+        >
+          <Feather name="calendar" size={16} color={COLORS.graphite} />
+          <Text style={styles.historyLinkText}>Programlar</Text>
+        </TouchableOpacity>
+      </View>
+
       <Text style={styles.sectionHeader}>Sırada Bu Var</Text>
       <Text style={styles.sectionSubtitle}>Her kategoride bir sonraki hedefin</Text>
 
@@ -157,12 +176,28 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: "center",
-    marginBottom: 32,
+    marginBottom: 14,
   },
   primaryButtonText: {
     color: COLORS.white,
     fontFamily: "Inter_700Bold",
     fontSize: 16,
+  },
+  linksRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 24,
+    marginBottom: 28,
+  },
+  historyLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  historyLinkText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+    color: COLORS.graphite,
   },
   sectionHeader: {
     fontFamily: "Inter_700Bold",
