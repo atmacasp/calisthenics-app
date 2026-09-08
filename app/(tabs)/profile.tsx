@@ -1,41 +1,45 @@
-import { View, Text, TouchableOpacity, Switch, ScrollView, Alert, StyleSheet, useColorScheme } from "react-native";
+import { View, Text, TouchableOpacity, Switch, ScrollView, Alert, StyleSheet, ActivityIndicator } from "react-native";
 import { useEffect, useState } from "react";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/authStore";
 import { useThemeStore } from "../../src/store/themeStore";
 import { profileService } from "../../src/services/profile.service";
 import { authService } from "../../src/services/auth.service";
+import { COLORS } from "../../src/constants/theme";
+
+const DANGER = "#dc2626";
+
+const LEVEL_LABELS: Record<string, string> = {
+  beginner: "Başlangıç",
+  intermediate: "Orta Seviye",
+  advanced: "İleri Seviye",
+};
 
 export default function ProfileScreen() {
   const session = useAuthStore((s) => s.session);
   const themePreference = useThemeStore((s) => s.preference);
   const setThemePreference = useThemeStore((s) => s.setPreference);
-  const systemScheme = useColorScheme();
 
   const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<any>(null);
   const [unit, setUnit] = useState<"metric" | "imperial">("metric");
   const [notifications, setNotifications] = useState(true);
   const [language, setLanguage] = useState<"tr" | "en">("tr");
   const [saving, setSaving] = useState(false);
 
-  const effectiveScheme = themePreference === "system" ? systemScheme : themePreference;
-  const isDark = effectiveScheme === "dark";
-  const colors = {
-    background: isDark ? "#111827" : "#ffffff",
-    card: isDark ? "#1f2937" : "#f3f4f6",
-    text: isDark ? "#f9fafb" : "#111827",
-    subtext: isDark ? "#9ca3af" : "#6b7280",
-    accent: "#22c55e",
-  };
-
   useEffect(() => {
     if (!session) return;
-    profileService.getProfile(session.user.id).then((profile) => {
-      setUnit(profile.unit_preference ?? "metric");
-      setNotifications(profile.notifications_enabled ?? true);
-      setLanguage(profile.language ?? "tr");
-      setLoading(false);
-    });
+    profileService
+      .getProfile(session.user.id)
+      .then((data) => {
+        setProfile(data);
+        setUnit(data.unit_preference ?? "metric");
+        setNotifications(data.notifications_enabled ?? true);
+        setLanguage((data.language as "tr" | "en") ?? "tr");
+      })
+      .catch((error: any) => Alert.alert("Hata", error.message ?? "Profil yüklenemedi"))
+      .finally(() => setLoading(false));
   }, [session]);
 
   const persist = async (updates: Record<string, any>) => {
@@ -104,75 +108,125 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.text }}>Yükleniyor...</Text>
+      <View style={styles.center}>
+        <ActivityIndicator color={COLORS.accent} />
       </View>
     );
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ padding: 16 }}>
-      <Text style={[styles.header, { color: colors.text }]}>Profil & Ayarlar</Text>
-      <Text style={[styles.email, { color: colors.subtext }]}>{session?.user.email}</Text>
+    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <View style={styles.headerRow}>
+        <Text style={styles.header}>Profil</Text>
+        {saving && <ActivityIndicator size="small" color={COLORS.accent} />}
+      </View>
 
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>Birim</Text>
+      <View style={styles.identityCard}>
+        <View style={styles.avatarCircle}>
+          <Text style={styles.avatarLetter}>{(profile?.full_name?.[0] ?? "?").toUpperCase()}</Text>
+        </View>
+        <View style={{ flex: 1, marginLeft: 14 }}>
+          <Text style={styles.identityName} numberOfLines={1}>
+            {profile?.full_name ?? "İsimsiz"}
+          </Text>
+          <Text style={styles.identityEmail} numberOfLines={1}>
+            {session?.user.email}
+          </Text>
+          <View style={styles.levelChip}>
+            <Ionicons name="ribbon-outline" size={12} color={COLORS.accent} />
+            <Text style={styles.levelChipText}>{LEVEL_LABELS[profile?.level] ?? "Seviye yok"}</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.miniStatsRow}>
+        <View style={styles.miniStatBox}>
+          <Text style={styles.miniStatNumber}>{profile?.current_streak ?? 0}</Text>
+          <Text style={styles.miniStatLabel}>güncel seri</Text>
+        </View>
+        <View style={styles.miniStatBox}>
+          <Text style={styles.miniStatNumber}>{profile?.longest_streak ?? 0}</Text>
+          <Text style={styles.miniStatLabel}>en uzun seri</Text>
+        </View>
+        <View style={styles.miniStatBox}>
+          <Text style={styles.miniStatNumber}>{profile?.height_cm ?? "-"}</Text>
+          <Text style={styles.miniStatLabel}>boy (cm)</Text>
+        </View>
+      </View>
+
+      <Text style={styles.sectionTitle}>Birim</Text>
       <View style={styles.rowButtons}>
         <TouchableOpacity
-          style={[styles.optionButton, { backgroundColor: colors.card }, unit === "metric" && styles.optionActive]}
+          style={[styles.optionButton, unit === "metric" && styles.optionActive]}
           onPress={() => handleUnitChange("metric")}
+          activeOpacity={0.8}
         >
-          <Text style={unit === "metric" ? styles.optionTextActive : { color: colors.text }}>Metrik (kg)</Text>
+          <Text style={[styles.optionText, unit === "metric" && styles.optionTextActive]}>Metrik (kg)</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.optionButton, { backgroundColor: colors.card }, unit === "imperial" && styles.optionActive]}
+          style={[styles.optionButton, unit === "imperial" && styles.optionActive]}
           onPress={() => handleUnitChange("imperial")}
+          activeOpacity={0.8}
         >
-          <Text style={unit === "imperial" ? styles.optionTextActive : { color: colors.text }}>İmperial (lb)</Text>
+          <Text style={[styles.optionText, unit === "imperial" && styles.optionTextActive]}>İmperial (lb)</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>Bildirimler</Text>
-      <View style={[styles.switchRow, { backgroundColor: colors.card }]}>
-        <Text style={{ color: colors.text }}>Bildirimleri Etkinleştir</Text>
-        <Switch value={notifications} onValueChange={handleNotificationsToggle} trackColor={{ true: colors.accent }} />
+      <Text style={styles.sectionTitle}>Bildirimler</Text>
+      <View style={styles.switchRow}>
+        <View style={styles.switchIconBox}>
+          <Ionicons name="notifications-outline" size={18} color={COLORS.accent} />
+        </View>
+        <Text style={styles.switchLabel}>Bildirimleri Etkinleştir</Text>
+        <Switch
+          value={notifications}
+          onValueChange={handleNotificationsToggle}
+          trackColor={{ true: COLORS.accent, false: COLORS.line }}
+          thumbColor={COLORS.white}
+        />
       </View>
 
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>Tema</Text>
+      <Text style={styles.sectionTitle}>Tema</Text>
       <View style={styles.rowButtons}>
         {(["system", "light", "dark"] as const).map((option) => (
           <TouchableOpacity
             key={option}
-            style={[styles.optionButtonSmall, { backgroundColor: colors.card }, themePreference === option && styles.optionActive]}
+            style={[styles.optionButtonSmall, themePreference === option && styles.optionActive]}
             onPress={() => handleThemeChange(option)}
+            activeOpacity={0.8}
           >
-            <Text style={themePreference === option ? styles.optionTextActive : { color: colors.text, fontSize: 13 }}>
+            <Text style={[styles.optionTextSmall, themePreference === option && styles.optionTextActive]}>
               {option === "system" ? "Sistem" : option === "light" ? "Açık" : "Koyu"}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
+      <Text style={styles.helperText}>Koyu tema hazırlanıyor — şu an tüm ekranlar açık temada.</Text>
 
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>Dil</Text>
+      <Text style={styles.sectionTitle}>Dil</Text>
       <View style={styles.rowButtons}>
         <TouchableOpacity
-          style={[styles.optionButton, { backgroundColor: colors.card }, language === "tr" && styles.optionActive]}
+          style={[styles.optionButton, language === "tr" && styles.optionActive]}
           onPress={() => handleLanguageChange("tr")}
+          activeOpacity={0.8}
         >
-          <Text style={language === "tr" ? styles.optionTextActive : { color: colors.text }}>Türkçe</Text>
+          <Text style={[styles.optionText, language === "tr" && styles.optionTextActive]}>Türkçe</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.optionButton, { backgroundColor: colors.card }, language === "en" && styles.optionActive]}
+          style={[styles.optionButton, language === "en" && styles.optionActive]}
           onPress={() => handleLanguageChange("en")}
+          activeOpacity={0.8}
         >
-          <Text style={language === "en" ? styles.optionTextActive : { color: colors.text }}>English</Text>
+          <Text style={[styles.optionText, language === "en" && styles.optionTextActive]}>English</Text>
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+      <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.8}>
+        <Ionicons name="log-out-outline" size={18} color={COLORS.ink} />
         <Text style={styles.signOutText}>Çıkış Yap</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount}>
+      <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount} activeOpacity={0.8}>
         <Text style={styles.deleteText}>Hesabı Sil</Text>
       </TouchableOpacity>
     </ScrollView>
@@ -180,18 +234,114 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  header: { fontSize: 28, fontWeight: "bold", marginBottom: 4 },
-  email: { fontSize: 13, marginBottom: 24 },
-  sectionTitle: { fontSize: 16, fontWeight: "700", marginTop: 20, marginBottom: 10 },
+  container: { flex: 1, backgroundColor: COLORS.paper },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.paper },
+  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  header: { fontFamily: "Inter_700Bold", fontSize: 24, color: COLORS.ink },
+  identityCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 16,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+  },
+  avatarCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "rgba(34,197,94,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.25)",
+  },
+  avatarLetter: { fontFamily: "Inter_700Bold", fontSize: 22, color: COLORS.accent },
+  identityName: { fontFamily: "Inter_700Bold", fontSize: 18, color: COLORS.ink },
+  identityEmail: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, marginTop: 2 },
+  levelChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(34,197,94,0.1)",
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginTop: 8,
+  },
+  levelChipText: { fontFamily: "Inter_600SemiBold", fontSize: 11, color: COLORS.accent },
+  miniStatsRow: { flexDirection: "row", gap: 8, marginTop: 12 },
+  miniStatBox: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    borderRadius: 14,
+    padding: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: COLORS.line,
+  },
+  miniStatNumber: { fontFamily: "BebasNeue_400Regular", fontSize: 24, color: COLORS.ink },
+  miniStatLabel: { fontFamily: "Inter_400Regular", fontSize: 10, color: COLORS.graphite, marginTop: 2, textAlign: "center" },
+  sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 15, color: COLORS.ink, marginTop: 26, marginBottom: 10 },
   rowButtons: { flexDirection: "row", gap: 8 },
-  optionButton: { flex: 1, padding: 12, borderRadius: 8, alignItems: "center" },
-  optionButtonSmall: { flex: 1, padding: 10, borderRadius: 8, alignItems: "center" },
-  optionActive: { backgroundColor: "#22c55e" },
-  optionTextActive: { color: "white", fontWeight: "700" },
-  switchRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 14, borderRadius: 8 },
-  signOutButton: { marginTop: 40, padding: 16, borderRadius: 8, borderWidth: 1, borderColor: "#d1d5db" },
-  signOutText: { textAlign: "center", fontWeight: "600" },
-  deleteButton: { marginTop: 12, padding: 16, borderRadius: 8 },
-  deleteText: { textAlign: "center", fontWeight: "700", color: "#ef4444" },
+  optionButton: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 12,
+    alignItems: "center",
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+  },
+  optionButtonSmall: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 12,
+    alignItems: "center",
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+  },
+  optionActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
+  optionText: { fontFamily: "Inter_500Medium", fontSize: 14, color: COLORS.ink },
+  optionTextSmall: { fontFamily: "Inter_500Medium", fontSize: 13, color: COLORS.ink },
+  optionTextActive: { color: COLORS.white, fontFamily: "Inter_700Bold" },
+  helperText: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.graphite, marginTop: 8 },
+  switchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: COLORS.white,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+  },
+  switchIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "rgba(34,197,94,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  switchLabel: { flex: 1, fontFamily: "Inter_500Medium", fontSize: 14, color: COLORS.ink },
+  signOutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 36,
+    paddingVertical: 15,
+    borderRadius: 14,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+  },
+  signOutText: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: COLORS.ink },
+  deleteButton: { marginTop: 10, paddingVertical: 15, borderRadius: 14, alignItems: "center" },
+  deleteText: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: DANGER },
 });

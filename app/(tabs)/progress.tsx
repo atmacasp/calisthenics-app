@@ -6,17 +6,11 @@ import { useAuthStore } from "../../src/store/authStore";
 import { profileService } from "../../src/services/profile.service";
 import { progressService } from "../../src/services/progress.service";
 import { bodyWeightService } from "../../src/services/bodyweight.service";
+import { programsService } from "../../src/services/programs.service";
+import { COLORS } from "../../src/constants/theme";
+import type { ProgramAdherence } from "../../src/types/programs";
 
-const COLORS = {
-  bg: "#0B0F0E",
-  panelBg: "#101815",
-  divider: "rgba(255,255,255,0.08)",
-  textPrimary: "#F5F7F6",
-  textSecondary: "rgba(245,247,246,0.55)",
-  textFaint: "rgba(245,247,246,0.35)",
-  accent: "#22c55e",
-  warn: "#f87171",
-};
+const WARN = "#dc2626";
 
 const SEGMENTS = [
   { key: "genel", label: "Genel", icon: "apps-outline" },
@@ -26,10 +20,10 @@ const SEGMENTS = [
 ] as const;
 
 function heatColor(count: number) {
-  if (count === 0) return { backgroundColor: "rgba(255,255,255,0.06)" };
+  if (count === 0) return { backgroundColor: COLORS.line };
   if (count <= 2) return { backgroundColor: "rgba(34,197,94,0.35)" };
   if (count <= 5) return { backgroundColor: "rgba(34,197,94,0.65)" };
-  return { backgroundColor: "#22c55e" };
+  return { backgroundColor: COLORS.accent };
 }
 
 function barHeight(value: number, max: number) {
@@ -49,13 +43,14 @@ export default function ProgressScreen() {
   const [categories, setCategories] = useState<any[]>([]);
   const [prs, setPrs] = useState<any[]>([]);
   const [weightLogs, setWeightLogs] = useState<any[]>([]);
+  const [adherence, setAdherence] = useState<ProgramAdherence | null>(null);
   const [newWeight, setNewWeight] = useState("");
   const [savingWeight, setSavingWeight] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!session) return;
     try {
-      const [profileData, statsData, heatmapData, volumeData, categoryData, prData, logs] = await Promise.all([
+      const [profileData, statsData, heatmapData, volumeData, categoryData, prData, logs, adherenceData] = await Promise.all([
         profileService.getProfile(session.user.id),
         progressService.getOverallStats(session.user.id),
         progressService.getActivityHeatmap(session.user.id),
@@ -63,6 +58,7 @@ export default function ProgressScreen() {
         progressService.getCategoryBreakdown(session.user.id),
         progressService.getPersonalRecords(session.user.id),
         bodyWeightService.getLogs(session.user.id),
+        programsService.getProgramAdherence(session.user.id),
       ]);
       setProfile(profileData);
       setStats(statsData);
@@ -71,6 +67,7 @@ export default function ProgressScreen() {
       setCategories(categoryData);
       setPrs(prData);
       setWeightLogs(logs ?? []);
+      setAdherence(adherenceData);
     } catch (error: any) {
       Alert.alert("Hata", error.message ?? "Veriler yüklenemedi");
     } finally {
@@ -135,7 +132,7 @@ export default function ProgressScreen() {
             style={[styles.segmentPill, segment === s.key && styles.segmentPillActive]}
             onPress={() => setSegment(s.key)}
           >
-            <Ionicons name={s.icon as any} size={14} color={segment === s.key ? "#0B0F0E" : COLORS.textSecondary} />
+            <Ionicons name={s.icon as any} size={14} color={segment === s.key ? COLORS.white : COLORS.graphite} />
             <Text style={[styles.segmentLabel, segment === s.key && styles.segmentLabelActive]}>{s.label}</Text>
           </TouchableOpacity>
         ))}
@@ -143,6 +140,31 @@ export default function ProgressScreen() {
 
       {segment === "genel" && (
         <>
+          {adherence && (
+            <View style={styles.adherenceCard}>
+              <View style={styles.adherenceHeaderRow}>
+                <Ionicons name="calendar-outline" size={14} color={COLORS.accent} />
+                <Text style={styles.adherenceProgramName}>{adherence.programName}</Text>
+              </View>
+              <View style={styles.adherenceRow}>
+                <View style={styles.adherenceCol}>
+                  <Text style={styles.adherenceNumber}>
+                    {adherence.completedThisWeek}/{adherence.trainingDaysPerWeek}
+                  </Text>
+                  <Text style={styles.adherenceLabel}>bu hafta</Text>
+                </View>
+                <View style={styles.adherenceDivider} />
+                <View style={styles.adherenceCol}>
+                  <Text style={styles.adherenceNumber}>%{adherence.adherencePercent}</Text>
+                  <Text style={styles.adherenceLabel}>genel uyum</Text>
+                </View>
+              </View>
+              <View style={styles.adherenceBarTrack}>
+                <View style={[styles.adherenceBarFill, { width: `${Math.min(100, adherence.adherencePercent)}%` }]} />
+              </View>
+            </View>
+          )}
+
           <View style={styles.streakRow}>
             <View style={styles.streakBox}>
               <Text style={styles.streakBoxNumber}>{profile?.current_streak ?? 0}</Text>
@@ -202,7 +224,7 @@ export default function ProgressScreen() {
               <Text style={styles.volumeSummaryLabel}>en yüksek hafta</Text>
             </View>
             <View style={styles.volumeSummaryBox}>
-              <Text style={[styles.volumeSummaryNumber, weeklyTrend < 0 && { color: COLORS.warn }]}>
+              <Text style={[styles.volumeSummaryNumber, weeklyTrend < 0 && { color: WARN }]}>
                 {weeklyTrend > 0 ? `+${weeklyTrend}` : weeklyTrend}
               </Text>
               <Text style={styles.volumeSummaryLabel}>haftalık trend</Text>
@@ -267,7 +289,7 @@ export default function ProgressScreen() {
             <TextInput
               style={styles.weightInput}
               placeholder="Kilo (kg)"
-              placeholderTextColor={COLORS.textFaint}
+              placeholderTextColor={COLORS.graphite}
               keyboardType="decimal-pad"
               value={newWeight}
               onChangeText={(v) => setNewWeight(v.replace(",", "."))}
@@ -285,7 +307,7 @@ export default function ProgressScreen() {
                   <Text style={styles.weightSummaryLabel}>güncel (kg)</Text>
                 </View>
                 <View style={styles.weightSummaryBox}>
-                  <Text style={[styles.weightSummaryNumber, weightDelta > 0 ? { color: COLORS.warn } : weightDelta < 0 ? { color: COLORS.accent } : null]}>
+                  <Text style={[styles.weightSummaryNumber, weightDelta > 0 ? { color: WARN } : weightDelta < 0 ? { color: COLORS.accent } : null]}>
                     {weightDelta > 0 ? `+${weightDelta}` : weightDelta}
                   </Text>
                   <Text style={styles.weightSummaryLabel}>ilk kayıttan beri</Text>
@@ -321,58 +343,81 @@ export default function ProgressScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.bg },
-  header: { fontFamily: "Inter_700Bold", fontSize: 24, color: COLORS.textPrimary },
-  segmentPill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, height: 34, borderRadius: 17, backgroundColor: COLORS.panelBg, marginRight: 8, borderWidth: 1, borderColor: COLORS.divider },
+  container: { flex: 1, backgroundColor: COLORS.paper },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.paper },
+  header: { fontFamily: "Inter_700Bold", fontSize: 24, color: COLORS.ink },
+  segmentPill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, height: 34, borderRadius: 17, backgroundColor: COLORS.white, marginRight: 8, borderWidth: 1, borderColor: COLORS.line },
   segmentPillActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
-  segmentLabel: { fontFamily: "Inter_500Medium", fontSize: 12, color: COLORS.textSecondary },
-  segmentLabelActive: { color: "#0B0F0E", fontFamily: "Inter_700Bold" },
-  sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 15, color: COLORS.textPrimary, marginBottom: 12, marginTop: 4 },
+  segmentLabel: { fontFamily: "Inter_500Medium", fontSize: 12, color: COLORS.graphite },
+  segmentLabelActive: { color: COLORS.white, fontFamily: "Inter_700Bold" },
+  sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 15, color: COLORS.ink, marginBottom: 12, marginTop: 4 },
+  adherenceCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.25)",
+  },
+  adherenceHeaderRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  adherenceProgramName: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 12,
+    color: COLORS.accent,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  adherenceRow: { flexDirection: "row", alignItems: "center", marginTop: 12 },
+  adherenceCol: { flex: 1, alignItems: "center" },
+  adherenceDivider: { width: 1, height: 32, backgroundColor: COLORS.line },
+  adherenceNumber: { fontFamily: "BebasNeue_400Regular", fontSize: 26, color: COLORS.ink },
+  adherenceLabel: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.graphite, marginTop: 2 },
+  adherenceBarTrack: { height: 6, borderRadius: 3, backgroundColor: COLORS.line, overflow: "hidden", marginTop: 14 },
+  adherenceBarFill: { height: 6, borderRadius: 3, backgroundColor: COLORS.accent },
   streakRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
-  streakBox: { flex: 1, backgroundColor: COLORS.panelBg, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: COLORS.divider },
+  streakBox: { flex: 1, backgroundColor: COLORS.white, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: COLORS.line },
   streakBoxNumber: { fontFamily: "BebasNeue_400Regular", fontSize: 34, color: COLORS.accent },
-  streakBoxLabel: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
-  statsCard: { flexDirection: "row", backgroundColor: COLORS.panelBg, borderRadius: 16, paddingVertical: 16, marginBottom: 24, borderWidth: 1, borderColor: COLORS.divider },
+  streakBoxLabel: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.graphite, marginTop: 2 },
+  statsCard: { flexDirection: "row", backgroundColor: COLORS.white, borderRadius: 16, paddingVertical: 16, marginBottom: 24, borderWidth: 1, borderColor: COLORS.line },
   statCol: { flex: 1, alignItems: "center" },
-  statDivider: { width: 1, backgroundColor: COLORS.divider },
-  statNumber: { fontFamily: "BebasNeue_400Regular", fontSize: 24, color: COLORS.textPrimary },
-  statNumberWord: { fontFamily: "Inter_700Bold", fontSize: 13, color: COLORS.textPrimary },
-  statLabel: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.textSecondary, marginTop: 4 },
-  heatmapPanel: { backgroundColor: COLORS.panelBg, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: COLORS.divider },
+  statDivider: { width: 1, backgroundColor: COLORS.line },
+  statNumber: { fontFamily: "BebasNeue_400Regular", fontSize: 24, color: COLORS.ink },
+  statNumberWord: { fontFamily: "Inter_700Bold", fontSize: 13, color: COLORS.ink },
+  statLabel: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.graphite, marginTop: 4 },
+  heatmapPanel: { backgroundColor: COLORS.white, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: COLORS.line },
   heatmapGrid: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
   heatmapCell: { width: 12, height: 12, borderRadius: 3 },
   heatmapLegendRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 14 },
-  heatmapLegendText: { fontFamily: "Inter_400Regular", fontSize: 10, color: COLORS.textFaint, marginHorizontal: 2 },
+  heatmapLegendText: { fontFamily: "Inter_400Regular", fontSize: 10, color: COLORS.graphite, marginHorizontal: 2 },
   volumeSummaryRow: { flexDirection: "row", gap: 8, marginBottom: 20 },
-  volumeSummaryBox: { flex: 1, backgroundColor: COLORS.panelBg, borderRadius: 14, padding: 12, alignItems: "center", borderWidth: 1, borderColor: COLORS.divider },
-  volumeSummaryNumber: { fontFamily: "BebasNeue_400Regular", fontSize: 22, color: COLORS.textPrimary },
-  volumeSummaryLabel: { fontFamily: "Inter_400Regular", fontSize: 10, color: COLORS.textSecondary, marginTop: 2, textAlign: "center" },
-  barChartPanel: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", backgroundColor: COLORS.panelBg, borderRadius: 16, padding: 16, paddingTop: 24, height: 180, borderWidth: 1, borderColor: COLORS.divider },
+  volumeSummaryBox: { flex: 1, backgroundColor: COLORS.white, borderRadius: 14, padding: 12, alignItems: "center", borderWidth: 1, borderColor: COLORS.line },
+  volumeSummaryNumber: { fontFamily: "BebasNeue_400Regular", fontSize: 22, color: COLORS.ink },
+  volumeSummaryLabel: { fontFamily: "Inter_400Regular", fontSize: 10, color: COLORS.graphite, marginTop: 2, textAlign: "center" },
+  barChartPanel: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", backgroundColor: COLORS.white, borderRadius: 16, padding: 16, paddingTop: 24, height: 180, borderWidth: 1, borderColor: COLORS.line },
   barCol: { flex: 1, alignItems: "center", justifyContent: "flex-end", height: "100%" },
-  barValue: { fontFamily: "Inter_600SemiBold", fontSize: 10, color: COLORS.textSecondary, marginBottom: 6 },
-  bar: { width: 14, backgroundColor: "rgba(34,197,94,0.4)", borderRadius: 4 },
+  barValue: { fontFamily: "Inter_600SemiBold", fontSize: 10, color: COLORS.graphite, marginBottom: 6 },
+  bar: { width: 14, backgroundColor: "rgba(34,197,94,0.35)", borderRadius: 4 },
   barCurrent: { backgroundColor: COLORS.accent },
-  barLabel: { fontFamily: "Inter_400Regular", fontSize: 9, color: COLORS.textFaint, marginTop: 6 },
-  categoryRow: { backgroundColor: COLORS.panelBg, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: COLORS.divider },
+  barLabel: { fontFamily: "Inter_400Regular", fontSize: 9, color: COLORS.graphite, marginTop: 6 },
+  categoryRow: { backgroundColor: COLORS.white, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: COLORS.line },
   categoryHeaderRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
-  categoryName: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.textPrimary },
-  categorySets: { fontFamily: "Inter_500Medium", fontSize: 12, color: COLORS.textSecondary },
-  categoryBarTrack: { height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.08)", overflow: "hidden" },
+  categoryName: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.ink },
+  categorySets: { fontFamily: "Inter_500Medium", fontSize: 12, color: COLORS.graphite },
+  categoryBarTrack: { height: 6, borderRadius: 3, backgroundColor: COLORS.line, overflow: "hidden" },
   categoryBarFill: { height: 6, borderRadius: 3, backgroundColor: COLORS.accent },
-  categoryStepText: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.textFaint, marginTop: 8 },
-  emptyText: { fontFamily: "Inter_400Regular", color: COLORS.textFaint, marginBottom: 12 },
-  prCard: { flexDirection: "row", backgroundColor: COLORS.panelBg, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: COLORS.divider },
-  prName: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.textPrimary },
-  prCategory: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
+  categoryStepText: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.graphite, marginTop: 8 },
+  emptyText: { fontFamily: "Inter_400Regular", color: COLORS.graphite, marginBottom: 12 },
+  prCard: { flexDirection: "row", backgroundColor: COLORS.white, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: COLORS.line },
+  prName: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.ink },
+  prCategory: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.graphite, marginTop: 2 },
   prBadgeCol: { alignItems: "flex-end", gap: 4, justifyContent: "center" },
-  prBadge: { fontFamily: "Inter_600SemiBold", fontSize: 11, color: COLORS.accent, backgroundColor: "rgba(34,197,94,0.12)", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: "hidden" },
+  prBadge: { fontFamily: "Inter_600SemiBold", fontSize: 11, color: COLORS.accent, backgroundColor: "rgba(34,197,94,0.1)", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: "hidden" },
   weightInputRow: { flexDirection: "row", gap: 8, marginBottom: 20 },
-  weightInput: { flex: 1, borderWidth: 1, borderColor: COLORS.divider, borderRadius: 10, padding: 12, color: COLORS.textPrimary, backgroundColor: COLORS.panelBg, fontFamily: "Inter_400Regular" },
+  weightInput: { flex: 1, borderWidth: 1, borderColor: COLORS.line, borderRadius: 10, padding: 12, color: COLORS.ink, backgroundColor: COLORS.white, fontFamily: "Inter_400Regular" },
   addWeightButton: { backgroundColor: COLORS.accent, paddingHorizontal: 20, justifyContent: "center", borderRadius: 10 },
-  addWeightButtonText: { color: "#0B0F0E", fontFamily: "Inter_700Bold" },
+  addWeightButtonText: { color: COLORS.white, fontFamily: "Inter_700Bold" },
   weightSummaryRow: { flexDirection: "row", gap: 8, marginBottom: 20 },
-  weightSummaryBox: { flex: 1, backgroundColor: COLORS.panelBg, borderRadius: 14, padding: 12, alignItems: "center", borderWidth: 1, borderColor: COLORS.divider },
-  weightSummaryNumber: { fontFamily: "BebasNeue_400Regular", fontSize: 20, color: COLORS.textPrimary },
-  weightSummaryLabel: { fontFamily: "Inter_400Regular", fontSize: 10, color: COLORS.textSecondary, marginTop: 2, textAlign: "center" },
+  weightSummaryBox: { flex: 1, backgroundColor: COLORS.white, borderRadius: 14, padding: 12, alignItems: "center", borderWidth: 1, borderColor: COLORS.line },
+  weightSummaryNumber: { fontFamily: "BebasNeue_400Regular", fontSize: 20, color: COLORS.ink },
+  weightSummaryLabel: { fontFamily: "Inter_400Regular", fontSize: 10, color: COLORS.graphite, marginTop: 2, textAlign: "center" },
 });

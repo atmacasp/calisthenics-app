@@ -1,12 +1,13 @@
-
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from "react-native";
 import { useCallback, useState } from "react";
-import { useLocalSearchParams, Stack, useFocusEffect } from "expo-router";
+import { useLocalSearchParams, Stack, useFocusEffect, router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/authStore";
 import { programsService } from "../../src/services/programs.service";
 import type { ProgramMovementWithName, ProgramWithDays, UserProgramRow } from "../../src/types/programs";
 import { COLORS } from "../../src/constants/theme";
 
+const DANGER = "#dc2626";
 const DAY_NAMES = ["", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
 const LEVEL_LABELS: Record<string, string> = {
   beginner: "Başlangıç",
@@ -33,7 +34,6 @@ export default function ProgramDetailScreen() {
 
   const loadData = useCallback(async () => {
     if (!id) return;
-    setLoading(true);
     try {
       const [detail, active] = await Promise.all([
         programsService.getProgramWithDays(id),
@@ -53,6 +53,7 @@ export default function ProgramDetailScreen() {
   );
 
   const isActive = !!(program && activeProgram?.program_id === program.id);
+  const isMine = !!(program && userId && program.user_id === userId);
 
   const handleFollow = async () => {
     if (!userId || !program || updating) return;
@@ -78,6 +79,32 @@ export default function ProgramDetailScreen() {
     } finally {
       setUpdating(false);
     }
+  };
+
+  const handleDelete = () => {
+    if (!program || !userId) return;
+    Alert.alert(
+      "Programı Sil",
+      `"${program.name}" kalıcı olarak silinecek. Bu programdan yaptığın antrenmanlar silinmez, sadece programla bağları kopar.`,
+      [
+        { text: "Vazgeç", style: "cancel" },
+        {
+          text: "Sil",
+          style: "destructive",
+          onPress: async () => {
+            setUpdating(true);
+            try {
+              await programsService.deleteProgram(program.id, userId);
+              router.replace("/programs");
+            } catch (error: any) {
+              Alert.alert("Hata", error.message ?? "Program silinemedi");
+            } finally {
+              setUpdating(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -107,7 +134,15 @@ export default function ProgramDetailScreen() {
       <Stack.Screen options={{ headerShown: true, title: program.name }} />
 
       <Text style={styles.title}>{program.name}</Text>
-      {program.level && <Text style={styles.levelBadge}>{LEVEL_LABELS[program.level] ?? program.level}</Text>}
+      <View style={styles.badgeRow}>
+        {program.level && <Text style={styles.levelBadge}>{LEVEL_LABELS[program.level] ?? program.level}</Text>}
+        {isMine && (
+          <View style={styles.mineChip}>
+            <Ionicons name="person-outline" size={11} color={COLORS.accent} />
+            <Text style={styles.mineChipText}>Senin programın</Text>
+          </View>
+        )}
+      </View>
       {program.description && <Text style={styles.description}>{program.description}</Text>}
 
       <TouchableOpacity
@@ -125,17 +160,38 @@ export default function ProgramDetailScreen() {
         )}
       </TouchableOpacity>
 
-      {days.map((day) => (
-        <View key={day} style={styles.dayCard}>
-          <Text style={styles.dayTitle}>{DAY_NAMES[day]}</Text>
-          {program.daysMap[day].map((pm) => (
-            <View key={pm.id} style={styles.movementRow}>
-              <Text style={styles.movementName}>{pm.movementName}</Text>
-              <Text style={styles.movementTarget}>{formatProgramTarget(pm)}</Text>
-            </View>
-          ))}
+      {isMine && (
+        <View style={styles.ownerRow}>
+          <TouchableOpacity
+            style={styles.ownerButton}
+            onPress={() => router.push(`/programs/builder?id=${program.id}`)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="create-outline" size={16} color={COLORS.ink} />
+            <Text style={styles.ownerButtonText}>Düzenle</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.ownerButton} onPress={handleDelete} activeOpacity={0.8}>
+            <Ionicons name="trash-outline" size={16} color={DANGER} />
+            <Text style={[styles.ownerButtonText, { color: DANGER }]}>Sil</Text>
+          </TouchableOpacity>
         </View>
-      ))}
+      )}
+
+      {days.length === 0 ? (
+        <Text style={styles.emptyText}>Bu programda henüz hareket yok.</Text>
+      ) : (
+        days.map((day) => (
+          <View key={day} style={styles.dayCard}>
+            <Text style={styles.dayTitle}>{DAY_NAMES[day]}</Text>
+            {program.daysMap[day].map((pm) => (
+              <View key={pm.id} style={styles.movementRow}>
+                <Text style={styles.movementName}>{pm.movementName}</Text>
+                <Text style={styles.movementTarget}>{formatProgramTarget(pm)}</Text>
+              </View>
+            ))}
+          </View>
+        ))
+      )}
     </ScrollView>
   );
 }
@@ -146,7 +202,18 @@ const styles = StyleSheet.create({
   content: { padding: 22, paddingBottom: 50 },
   emptyText: { fontFamily: "Inter_400Regular", color: COLORS.graphite },
   title: { fontFamily: "Inter_700Bold", fontSize: 24, color: COLORS.ink },
-  levelBadge: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: COLORS.graphite, marginTop: 4 },
+  badgeRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 6 },
+  levelBadge: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: COLORS.graphite },
+  mineChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(34,197,94,0.1)",
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  mineChipText: { fontFamily: "Inter_600SemiBold", fontSize: 11, color: COLORS.accent },
   description: { fontFamily: "Inter_400Regular", fontSize: 14, color: COLORS.ink, marginTop: 10, lineHeight: 20 },
   followButton: {
     backgroundColor: COLORS.accent,
@@ -154,16 +221,29 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
     marginTop: 18,
-    marginBottom: 24,
   },
   followButtonActive: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.line },
   followButtonText: { fontFamily: "Inter_700Bold", fontSize: 15, color: COLORS.white },
   followButtonTextActive: { color: COLORS.graphite },
+  ownerRow: { flexDirection: "row", gap: 10, marginTop: 10 },
+  ownerButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+  },
+  ownerButtonText: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.ink },
   dayCard: {
     backgroundColor: COLORS.white,
     borderRadius: 14,
     padding: 16,
-    marginBottom: 12,
+    marginTop: 12,
     shadowColor: COLORS.ink,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
