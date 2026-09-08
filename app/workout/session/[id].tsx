@@ -92,6 +92,7 @@ export default function WorkoutSessionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const authSession = useAuthStore((s) => s.session);
   const sessionMovements = useWorkoutStore((s) => s.sessionMovements);
+  const sessionProgramLabel = useWorkoutStore((s) => s.sessionProgramLabel);
   const addSetToMovement = useWorkoutStore((s) => s.addSetToMovement);
   const removeMovement = useWorkoutStore((s) => s.removeMovement);
   const reset = useWorkoutStore((s) => s.reset);
@@ -237,6 +238,13 @@ export default function WorkoutSessionScreen() {
       )}
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {sessionProgramLabel && (
+          <View style={styles.programBadge}>
+            <Feather name="calendar" size={12} color={COLORS.accent} />
+            <Text style={styles.programBadgeText}>{sessionProgramLabel}</Text>
+          </View>
+        )}
+
         {sessionMovements.length === 0 && (
           <View style={styles.emptyBox}>
             <Feather name="activity" size={28} color={COLORS.line} />
@@ -385,6 +393,18 @@ export default function WorkoutSessionScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.paper },
   scrollContent: { padding: 16, paddingBottom: 32 },
+  programBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(34, 197, 94, 0.1)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    marginBottom: 16,
+  },
+  programBadgeText: { fontFamily: "Inter_700Bold", fontSize: 13, color: COLORS.accent },
   restBanner: {
     backgroundColor: COLORS.ink,
     padding: 12,

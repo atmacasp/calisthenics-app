@@ -3,10 +3,11 @@ import { supabase } from "../lib/supabase";
 import { profileService } from "./profile.service";
 
 export const workoutService = {
-  async startSession(userId: string) {
+  /** programId verilirse oturum o programa bağlı olarak işaretlenir (workout_sessions.program_id). */
+  async startSession(userId: string, programId?: string) {
     const { data, error } = await supabase
       .from("workout_sessions")
-      .insert({ user_id: userId })
+      .insert({ user_id: userId, program_id: programId ?? null })
       .select()
       .single();
     if (error) throw error;

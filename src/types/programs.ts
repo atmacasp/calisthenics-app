@@ -24,3 +24,12 @@ export interface ProgramMovementWithName {
 export interface ProgramWithDays extends ProgramRow {
   daysMap: Record<number, ProgramMovementWithName[]>;
 }
+
+/** programsService.getActiveProgramForToday sonucu - "bugün ne yapmalıyım" sorusunun cevabı */
+export interface TodayProgramPlan {
+  program: ProgramWithDays;
+  dayOfWeek: number;
+  dayName: string;
+  /** Bugün için planlanmış hareketler. Boşsa bugün o programda dinlenme günüdür. */
+  movements: ProgramMovementWithName[];
+}

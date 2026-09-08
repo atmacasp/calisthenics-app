@@ -1,14 +1,11 @@
 
 import { supabase } from "../lib/supabase";
-import type { ProgramRow, ProgramWithDays, UserProgramRow } from "../types/programs";
+import type { ProgramRow, ProgramWithDays, TodayProgramPlan, UserProgramRow } from "../types/programs";
+
+const DAY_NAMES = ["", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
 
 /**
  * programs / program_movements / user_programs tablolarının servis katmanı.
- * Henüz hiçbir ekrana bağlı değil (programs tablosunda seed veri de yok) -
- * bu bilinçli bir kapsam kararı: "Program Takibi" kendi başına ayrı bir
- * özellik (program listeleme/seçme/gün gün takip ekranları + seed veri
- * gerektiriyor). Bu dosya, o özellik geldiğinde üzerine inşa edilecek
- * modüler ve DB şemasıyla birebir uyumlu temeli hazırlıyor.
  */
 export const programsService = {
   async listPrograms(): Promise<ProgramRow[]> {
@@ -88,5 +85,29 @@ export const programsService = {
   async stopProgram(userProgramId: string): Promise<void> {
     const { error } = await supabase.from("user_programs").update({ is_active: false }).eq("id", userProgramId);
     if (error) throw error;
+  },
+
+  /**
+   * Aktif takip edilen programın BUGÜNKÜ gününü döner - "bugün ne yapmalıyım"
+   * sorusunun cevabı. JS'in Date.getDay()'i (0=Pazar..6=Cumartesi) döner,
+   * bunu şemamızın 1=Pazartesi..7=Pazar sistemine çeviriyoruz. Bugün için
+   * planlanmış hareket yoksa (movements boş) o gün dinlenme günüdür.
+   */
+  async getActiveProgramForToday(userId: string): Promise<TodayProgramPlan | null> {
+    const active = await programsService.getActiveUserProgram(userId);
+    if (!active || !active.program_id) return null;
+
+    const program = await programsService.getProgramWithDays(active.program_id);
+    if (!program) return null;
+
+    const jsDay = new Date().getDay();
+    const dayOfWeek = jsDay === 0 ? 7 : jsDay;
+
+    return {
+      program,
+      dayOfWeek,
+      dayName: DAY_NAMES[dayOfWeek],
+      movements: program.daysMap[dayOfWeek] ?? [],
+    };
   },
 };

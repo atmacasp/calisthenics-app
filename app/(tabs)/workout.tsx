@@ -6,10 +6,12 @@ import { Feather } from "@expo/vector-icons";
 import { movementsService } from "../../src/services/movements.service";
 import { progressService } from "../../src/services/progress.service";
 import { workoutService } from "../../src/services/workout.service";
+import { programsService } from "../../src/services/programs.service";
 import { useAuthStore } from "../../src/store/authStore";
 import { useWorkoutStore } from "../../src/store/workoutStore";
 import { COLORS } from "../../src/constants/theme";
 import type { MovementSetLogMap, MovementWithGroupAndPrerequisites } from "../../src/types/movements";
+import type { TodayProgramPlan } from "../../src/types/programs";
 import { formatTarget } from "../../src/utils/targetProgress";
 import { computeFocusSuggestions, type FocusSuggestion } from "../../src/utils/workoutSuggestions";
 
@@ -19,17 +21,25 @@ export default function WorkoutScreen() {
   const addMovement = useWorkoutStore((s) => s.addMovement);
 
   const [suggestions, setSuggestions] = useState<FocusSuggestion[]>([]);
+  const [todayPlan, setTodayPlan] = useState<TodayProgramPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [startingId, setStartingId] = useState<string | null>(null);
+  const [startingProgram, setStartingProgram] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!userId) return;
     try {
-      const [movements, setLogMap]: [MovementWithGroupAndPrerequisites[], MovementSetLogMap] = await Promise.all([
+      const [movements, setLogMap, plan]: [
+        MovementWithGroupAndPrerequisites[],
+        MovementSetLogMap,
+        TodayProgramPlan | null
+      ] = await Promise.all([
         movementsService.getAllMovementsWithPrerequisites(),
         progressService.getMovementSetLogs(userId),
+        programsService.getActiveProgramForToday(userId),
       ]);
       setSuggestions(computeFocusSuggestions(movements, setLogMap));
+      setTodayPlan(plan);
     } finally {
       setLoading(false);
     }
@@ -74,6 +84,29 @@ export default function WorkoutScreen() {
     }
   };
 
+  const handleStartProgramDay = async () => {
+    if (!userId || !todayPlan || startingProgram || todayPlan.movements.length === 0) return;
+    setStartingProgram(true);
+    try {
+      const newSession = await workoutService.startSession(userId, todayPlan.program.id);
+      startSession(newSession.id, `${todayPlan.program.name} · ${todayPlan.dayName}`);
+      todayPlan.movements.forEach((pm) => {
+        if (!pm.movementId) return;
+        addMovement({
+          id: pm.movementId,
+          name: pm.movementName,
+          targetType: pm.targetDurationSeconds ? "duration" : "reps_sets",
+          targetSets: pm.targetSets,
+          targetReps: pm.targetReps,
+          targetDurationSeconds: pm.targetDurationSeconds,
+        });
+      });
+      router.push(`/workout/session/${newSession.id}`);
+    } finally {
+      setStartingProgram(false);
+    }
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <Text style={styles.title}>Antrenman</Text>
@@ -101,6 +134,45 @@ export default function WorkoutScreen() {
           <Text style={styles.historyLinkText}>Programlar</Text>
         </TouchableOpacity>
       </View>
+
+      {todayPlan && (
+        <View style={styles.todayCard}>
+          <View style={styles.todayHeaderRow}>
+            <Feather name="calendar" size={14} color={COLORS.accent} />
+            <Text style={styles.todayProgramName}>{todayPlan.program.name}</Text>
+          </View>
+          <Text style={styles.todayDayName}>{todayPlan.dayName}</Text>
+
+          {todayPlan.movements.length === 0 ? (
+            <Text style={styles.restDayText}>Bugün dinlenme günü 🌿</Text>
+          ) : (
+            <>
+              {todayPlan.movements.map((pm) => (
+                <View key={pm.id} style={styles.todayMovementRow}>
+                  <Text style={styles.todayMovementName}>{pm.movementName}</Text>
+                  <Text style={styles.todayMovementTarget}>
+                    {pm.targetDurationSeconds
+                      ? `${pm.targetSets ?? 1} set x ${pm.targetDurationSeconds} sn`
+                      : `${pm.targetSets ?? 1} set x ${pm.targetReps ?? "-"} tekrar`}
+                  </Text>
+                </View>
+              ))}
+              <TouchableOpacity
+                style={styles.todayStartButton}
+                activeOpacity={0.85}
+                disabled={startingProgram}
+                onPress={handleStartProgramDay}
+              >
+                {startingProgram ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : (
+                  <Text style={styles.todayStartButtonText}>Bugünün Antrenmanına Başla</Text>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      )}
 
       <Text style={styles.sectionHeader}>Sırada Bu Var</Text>
       <Text style={styles.sectionSubtitle}>Her kategoride bir sonraki hedefin</Text>
@@ -214,6 +286,51 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   loadingBox: { paddingVertical: 40, alignItems: "center" },
+  todayCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 14,
+    padding: 18,
+    marginBottom: 28,
+    borderWidth: 1,
+    borderColor: "rgba(34, 197, 94, 0.25)",
+    shadowColor: COLORS.ink,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  todayHeaderRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  todayProgramName: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 12,
+    color: COLORS.accent,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  todayDayName: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 19,
+    color: COLORS.ink,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  restDayText: { fontFamily: "Inter_400Regular", fontSize: 14, color: COLORS.graphite },
+  todayMovementRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  todayMovementName: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.ink, flex: 1, marginRight: 8 },
+  todayMovementTarget: { fontFamily: "Inter_400Regular", fontSize: 13, color: COLORS.graphite },
+  todayStartButton: {
+    backgroundColor: COLORS.accent,
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  todayStartButtonText: { fontFamily: "Inter_700Bold", fontSize: 14, color: COLORS.white },
   card: {
     flexDirection: "row",
     alignItems: "center",

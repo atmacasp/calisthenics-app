@@ -32,7 +32,9 @@ interface AddMovementInput {
 interface WorkoutState {
   activeSessionId: string | null;
   sessionMovements: SessionMovement[];
-  startSession: (sessionId: string) => void;
+  /** Bu oturum bir programdan başlatıldıysa "Program Adı · Gün Adı" etiketi (bkz. session/[id].tsx rozeti). */
+  sessionProgramLabel: string | null;
+  startSession: (sessionId: string, programLabel?: string | null) => void;
   addMovement: (movement: AddMovementInput) => void;
   removeMovement: (movementId: string) => void;
   addSetToMovement: (movementId: string, set: LoggedSet) => void;
@@ -42,7 +44,9 @@ interface WorkoutState {
 export const useWorkoutStore = create<WorkoutState>((set) => ({
   activeSessionId: null,
   sessionMovements: [],
-  startSession: (sessionId) => set({ activeSessionId: sessionId, sessionMovements: [] }),
+  sessionProgramLabel: null,
+  startSession: (sessionId, programLabel = null) =>
+    set({ activeSessionId: sessionId, sessionMovements: [], sessionProgramLabel: programLabel }),
   addMovement: (movement) =>
     set((state) => {
       if (state.sessionMovements.some((m) => m.movementId === movement.id)) return state;
@@ -72,5 +76,5 @@ export const useWorkoutStore = create<WorkoutState>((set) => ({
         m.movementId === movementId ? { ...m, sets: [...m.sets, newSet] } : m
       ),
     })),
-  reset: () => set({ activeSessionId: null, sessionMovements: [] }),
+  reset: () => set({ activeSessionId: null, sessionMovements: [], sessionProgramLabel: null }),
 }));
