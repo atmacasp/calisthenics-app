@@ -10,7 +10,7 @@ import { useAuthStore } from "../../src/store/authStore";
 import { useWorkoutStore } from "../../src/store/workoutStore";
 import { COLORS } from "../../src/constants/theme";
 import type { MovementWithPrerequisites, MovementSetLogMap } from "../../src/types/movements";
-import { areAllPrerequisitesMet, formatTarget, getPrerequisiteTarget, isPrerequisiteMet } from "../../src/utils/targetProgress";
+import { areAllPrerequisitesMet, computeTargetProgress, formatTarget, getPrerequisiteTarget, isPrerequisiteMet } from "../../src/utils/targetProgress";
 
 export default function MovementDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -55,6 +55,7 @@ export default function MovementDetailScreen() {
   }
 
   const targetText = formatTarget(movement);
+  const targetProgress = computeTargetProgress(movement, setLogMap[movement.id]);
   const prerequisites = movement.prerequisites ?? [];
   const metCount = prerequisites.filter((p) => isPrerequisiteMet(p, setLogMap)).length;
   const allMet = prerequisites.length === 0 || metCount === prerequisites.length;
@@ -103,6 +104,23 @@ export default function MovementDetailScreen() {
           <View style={styles.targetCard}>
             <Text style={styles.targetLabel}>Hedef</Text>
             <Text style={styles.targetValue}>{targetText}</Text>
+            {targetProgress && (
+              <View style={{ marginTop: 10 }}>
+                <View style={{ height: 6, borderRadius: 3, backgroundColor: COLORS.line, overflow: "hidden" }}>
+                  <View style={{ height: 6, borderRadius: 3, width: `${Math.round(targetProgress.ratio * 100)}%`, backgroundColor: COLORS.accent }} />
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 6, gap: 8 }}>
+                  <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 12, color: targetProgress.met ? COLORS.accent : COLORS.ink }}>
+                    {targetProgress.met ? "Hedef tamamlandı" : targetProgress.label}
+                  </Text>
+                  {targetProgress.detail && (
+                    <Text style={{ fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite }}>
+                      {targetProgress.detail}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            )}
             {movement.target_note && <Text style={styles.targetNote}>{movement.target_note}</Text>}
           </View>
         )}

@@ -88,3 +88,66 @@ export function formatTarget(t: TargetSpec | null | undefined): string | null {
   }
   return null;
 }
+
+/** Hedefe ne kadar yaklaşıldığı - ekranda gösterilmeye hazır hâlde. */
+export interface TargetProgress {
+  /** 0..1 arası doluluk */
+  ratio: number;
+  /** "14 / 20 sn" ya da "2 / 3 set x 15 tekrar" */
+  label: string;
+  /** Hedef tekrara hiç ulaşılamadıysa nerede olunduğunu açıklar */
+  detail: string | null;
+  met: boolean;
+}
+
+/**
+ * isTargetMet ile AYNI kuralı kullanır, sadece "evet/hayır" yerine mesafeyi
+ * döner - böylece çubuk dolduğunda hedef gerçekten karşılanmış olur.
+ *
+ * duration : herhangi bir setteki en uzun tutuş / hedef süre
+ * reps_sets: TEK bir antrenmanda hedef tekrara ulaşan en fazla set sayısı /
+ *            hedef set sayısı. Hedef tekrara hiç ulaşılmadıysa çubuk 0 kalır,
+ *            bu yüzden detail alanında en iyi tekrar ayrıca gösterilir.
+ */
+export function computeTargetProgress(
+  target: TargetSpec | null | undefined,
+  sessionSets: Record<string, SetLogEntry[]> | undefined
+): TargetProgress | null {
+  if (!target?.target_type) return null;
+
+  const allSets: SetLogEntry[] = [];
+  if (sessionSets) {
+    Object.values(sessionSets).forEach((sets) => sets.forEach((s) => allSets.push(s)));
+  }
+
+  if (target.target_type === "duration") {
+    const goal = target.target_duration_seconds;
+    if (!goal) return null;
+    const best = allSets.reduce((max, s) => Math.max(max, s.duration_seconds ?? 0), 0);
+    return {
+      ratio: Math.min(1, best / goal),
+      label: `${best} / ${goal} sn`,
+      detail: null,
+      met: best >= goal,
+    };
+  }
+
+  const goalReps = target.target_reps;
+  if (!goalReps) return null;
+  const goalSets = target.target_sets ?? 1;
+
+  const bestQualifyingSets = sessionSets
+    ? Object.values(sessionSets).reduce(
+        (max, sets) => Math.max(max, sets.filter((s) => (s.reps ?? 0) >= goalReps).length),
+        0
+      )
+    : 0;
+  const bestReps = allSets.reduce((max, s) => Math.max(max, s.reps ?? 0), 0);
+
+  return {
+    ratio: Math.min(1, bestQualifyingSets / goalSets),
+    label: `${Math.min(bestQualifyingSets, goalSets)} / ${goalSets} set x ${goalReps} tekrar`,
+    detail: bestQualifyingSets < goalSets && bestReps > 0 ? `En iyi setin: ${bestReps} tekrar` : null,
+    met: bestQualifyingSets >= goalSets,
+  };
+}
