@@ -1,6 +1,5 @@
-
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { router, useLocalSearchParams, Stack } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { movementsService } from "../../src/services/movements.service";
@@ -8,7 +7,7 @@ import { progressService } from "../../src/services/progress.service";
 import { useAuthStore } from "../../src/store/authStore";
 import { COLORS } from "../../src/constants/theme";
 import type { MovementListItem, MovementSetLogMap } from "../../src/types/movements";
-import { areAllPrerequisitesMet } from "../../src/utils/targetProgress";
+import { areAllPrerequisitesMet, computeTargetProgress } from "../../src/utils/targetProgress";
 
 export default function MovementGroupScreen() {
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
@@ -31,6 +30,11 @@ export default function MovementGroupScreen() {
       .finally(() => setLoading(false));
   }, [id, userId]);
 
+  const completedCount = useMemo(
+    () => movements.filter((m) => computeTargetProgress(m, setLogMap[m.id])?.met).length,
+    [movements, setLogMap]
+  );
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -45,6 +49,11 @@ export default function MovementGroupScreen() {
       <Stack.Screen options={{ headerShown: true, title: name ?? "Progression" }} />
       <View style={styles.headerContainer}>
         <Text style={styles.headerSubtitle}>Basamakları sırayla tamamlayarak ilerle</Text>
+        {movements.length > 0 && (
+          <Text style={styles.headerCount}>
+            {completedCount} / {movements.length} basamak tamamlandı
+          </Text>
+        )}
       </View>
       <FlatList
         data={movements}
@@ -53,7 +62,14 @@ export default function MovementGroupScreen() {
         showsVerticalScrollIndicator={false}
         renderItem={({ item, index }) => {
           const unlocked = areAllPrerequisitesMet(item.prerequisites ?? [], setLogMap);
+          const progress = computeTargetProgress(item, setLogMap[item.id]);
+          const done = progress?.met ?? false;
           const isLast = index === movements.length - 1;
+
+          // Kilitli basamakta ilerleme çubuğu göstermiyoruz: henüz o basamağa
+          // çalışılmıyor, boş bir çubuk sadece gürültü olurdu.
+          const showBar = unlocked && !done && !!progress;
+
           return (
             <View>
               <TouchableOpacity
@@ -61,22 +77,45 @@ export default function MovementGroupScreen() {
                 activeOpacity={0.7}
                 onPress={() => router.push(`/movement/${item.id}`)}
               >
-                <View style={[styles.stepCircle, !unlocked && styles.stepCircleLocked]}>
-                  {unlocked ? (
+                <View
+                  style={[
+                    styles.stepCircle,
+                    !unlocked && styles.stepCircleLocked,
+                    done && styles.stepCircleDone,
+                  ]}
+                >
+                  {done ? (
+                    <Feather name="check" size={16} color={COLORS.white} />
+                  ) : unlocked ? (
                     <Text style={styles.stepNumber}>{index + 1}</Text>
                   ) : (
                     <Feather name="lock" size={14} color={COLORS.white} />
                   )}
                 </View>
+
                 <View style={styles.rowContent}>
                   <Text style={styles.rowTitle}>{item.name}</Text>
-                  <Text style={styles.rowDifficulty}>
-                    {unlocked ? `Zorluk: ${item.difficulty_level}/10` : "Ön koşul gerekiyor"}
+                  <Text style={[styles.rowMeta, done && styles.rowMetaDone]}>
+                    {done
+                      ? "Tamamlandı"
+                      : !unlocked
+                      ? "Ön koşul gerekiyor"
+                      : progress?.label ?? `Zorluk: ${item.difficulty_level}/10`}
                   </Text>
+
+                  {showBar && (
+                    <>
+                      <View style={styles.barTrack}>
+                        <View style={[styles.barFill, { width: `${Math.round(progress!.ratio * 100)}%` }]} />
+                      </View>
+                      {progress!.detail && <Text style={styles.barDetail}>{progress!.detail}</Text>}
+                    </>
+                  )}
                 </View>
+
                 <Feather name="chevron-right" size={20} color={COLORS.graphite} />
               </TouchableOpacity>
-              {!isLast && <View style={styles.connector} />}
+              {!isLast && <View style={[styles.connector, done && styles.connectorDone]} />}
             </View>
           );
         }}
@@ -97,6 +136,14 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     fontSize: 14,
     color: COLORS.graphite,
+  },
+  headerCount: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 12,
+    color: COLORS.accent,
+    marginTop: 4,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
   },
   listContent: {
     paddingHorizontal: 22,
@@ -126,9 +173,22 @@ const styles = StyleSheet.create({
     marginRight: 14,
   },
   stepCircleLocked: { backgroundColor: COLORS.graphite },
+  stepCircleDone: { backgroundColor: COLORS.ink },
   stepNumber: { color: COLORS.white, fontFamily: "Inter_700Bold", fontSize: 14 },
   rowContent: { flex: 1 },
   rowTitle: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: COLORS.ink },
-  rowDifficulty: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, marginTop: 2 },
+  rowMeta: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, marginTop: 2 },
+  rowMetaDone: { fontFamily: "Inter_600SemiBold", color: COLORS.accent },
+  barTrack: {
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: COLORS.line,
+    overflow: "hidden",
+    marginTop: 8,
+    marginRight: 8,
+  },
+  barFill: { height: 5, borderRadius: 3, backgroundColor: COLORS.accent },
+  barDetail: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.graphite, marginTop: 4 },
   connector: { width: 2, height: 14, backgroundColor: COLORS.line, marginLeft: 32 },
+  connectorDone: { backgroundColor: COLORS.accent },
 });
