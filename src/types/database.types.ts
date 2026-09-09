@@ -21,6 +21,7 @@ export interface Database {
           weight_kg: number | null;
           unit_preference: "metric" | "imperial";
           level: "beginner" | "intermediate" | "advanced";
+          onboarding_completed: boolean;
           theme: "system" | "light" | "dark";
           language: string;
           notifications_enabled: boolean;
@@ -38,6 +39,7 @@ export interface Database {
           weight_kg?: number | null;
           unit_preference?: "metric" | "imperial";
           level?: "beginner" | "intermediate" | "advanced";
+          onboarding_completed?: boolean;
           theme?: "system" | "light" | "dark";
           language?: string;
           notifications_enabled?: boolean;
@@ -128,6 +130,7 @@ export interface Database {
       programs: {
         Row: {
           id: string;
+          user_id: string | null;
           name: string;
           description: string | null;
           level: "beginner" | "intermediate" | "advanced" | null;
@@ -136,6 +139,7 @@ export interface Database {
         };
         Insert: {
           id?: string;
+          user_id?: string | null;
           name: string;
           description?: string | null;
           level?: "beginner" | "intermediate" | "advanced" | null;

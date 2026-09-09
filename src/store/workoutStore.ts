@@ -1,10 +1,11 @@
 import { create } from "zustand";
 
+/** Supabase null doner, yerel state undefined kullanabilir - ikisini de kabul ediyoruz. */
 export interface LoggedSet {
   id: string;
-  reps?: number;
-  duration_seconds?: number;
-  added_weight_kg?: number;
+  reps?: number | null;
+  duration_seconds?: number | null;
+  added_weight_kg?: number | null;
 }
 
 export interface SessionMovement {

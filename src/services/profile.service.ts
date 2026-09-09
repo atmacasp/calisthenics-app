@@ -1,5 +1,9 @@
 import { supabase, withAuthRetry } from "../lib/supabase";
 import { toLocalDateKey, todayLocalKey } from "../utils/date";
+import type { Database } from "../types/database.types";
+
+/** profiles tablosunda guncellenebilir alanlar - Record<string, any> yerine gercek sema. */
+export type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
 
 export const profileService = {
   async getProfile(userId: string) {
@@ -9,7 +13,7 @@ export const profileService = {
       return data;
     });
   },
-  async updateProfile(userId: string, updates: Record<string, any>) {
+  async updateProfile(userId: string, updates: ProfileUpdate) {
     const { data, error } = await supabase.from("profiles").update(updates).eq("id", userId).select().single();
     if (error) throw error;
     return data;

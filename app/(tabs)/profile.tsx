@@ -4,7 +4,7 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/authStore";
 import { useThemeStore } from "../../src/store/themeStore";
-import { profileService } from "../../src/services/profile.service";
+import { profileService, type ProfileUpdate } from "../../src/services/profile.service";
 import { authService } from "../../src/services/auth.service";
 import { notificationsService, describeReminders } from "../../src/services/notifications.service";
 import { COLORS } from "../../src/constants/theme";
@@ -48,7 +48,7 @@ export default function ProfileScreen() {
       .finally(() => setLoading(false));
   }, [session]);
 
-  const persist = async (updates: Record<string, any>) => {
+  const persist = async (updates: ProfileUpdate) => {
     if (!session) return;
     setSaving(true);
     try {

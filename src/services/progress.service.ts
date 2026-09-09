@@ -158,21 +158,21 @@ export const progressService = {
     const prs = await this.getPersonalRecords(userId);
     if (!prs.length) return null;
 
-    let bestDuration: { name: string; value: number } | null = null;
-    let bestWeight: { name: string; value: number } | null = null;
-    let bestReps: { name: string; value: number } | null = null;
+    // let + forEach kalibi TypeScript'in akis analizini yaniltiyordu: degisken
+    // sadece closure icinde atandigi icin disarida hala "null" sanilip narrow
+    // ediliyor, sonrasinda .name/.value okumak "never" hatasi veriyordu.
+    // reduce ile ayni is, tip guvenli sekilde yapiliyor.
+    type Highlight = { name: string; value: number };
+    const pickBest = (metric: "maxDuration" | "maxWeight" | "maxReps"): Highlight | null =>
+      prs.reduce<Highlight | null>(
+        (best, pr) =>
+          pr[metric] > 0 && (!best || pr[metric] > best.value) ? { name: pr.name, value: pr[metric] } : best,
+        null
+      );
 
-    prs.forEach((pr) => {
-      if (pr.maxDuration > 0 && (!bestDuration || pr.maxDuration > bestDuration.value)) {
-        bestDuration = { name: pr.name, value: pr.maxDuration };
-      }
-      if (pr.maxWeight > 0 && (!bestWeight || pr.maxWeight > bestWeight.value)) {
-        bestWeight = { name: pr.name, value: pr.maxWeight };
-      }
-      if (pr.maxReps > 0 && (!bestReps || pr.maxReps > bestReps.value)) {
-        bestReps = { name: pr.name, value: pr.maxReps };
-      }
-    });
+    const bestDuration = pickBest("maxDuration");
+    const bestWeight = pickBest("maxWeight");
+    const bestReps = pickBest("maxReps");
 
     if (bestDuration) return { name: bestDuration.name, value: `${bestDuration.value} sn`, kind: "en uzun tuttuğun hareket" };
     if (bestWeight) return { name: bestWeight.name, value: `+${bestWeight.value} kg`, kind: "en yüksek ek ağırlık" };

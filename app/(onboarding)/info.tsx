@@ -9,7 +9,7 @@ import {
   ScrollView,
 } from "react-native";
 import { useState } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -25,7 +25,10 @@ export default function InfoScreen() {
   const setInfo = useOnboardingStore((s) => s.setInfo);
 
   const { control, handleSubmit, formState: { errors } } = useForm<OnboardingInfoData>({
-    resolver: zodResolver(onboardingInfoSchema),
+    // z.coerce.number() semanin GIRDI tipini unknown yapiyor; formun degerleri
+    // ise cikti tipinde (number). Calisma zamani dogru - coerce metni sayiya
+    // ceviriyor - sadece statik tipler ortusmuyor, o yuzden burada daraltiyoruz.
+    resolver: zodResolver(onboardingInfoSchema) as Resolver<OnboardingInfoData>,
     defaultValues: { full_name: "", height: undefined, weight: undefined, unit_preference: "metric" },
   });
 

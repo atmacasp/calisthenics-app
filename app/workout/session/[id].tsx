@@ -5,7 +5,7 @@ import { router, useLocalSearchParams, Stack } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../../src/store/authStore";
-import { useWorkoutStore } from "../../../src/store/workoutStore";
+import { useWorkoutStore, type LoggedSet } from "../../../src/store/workoutStore";
 import { workoutService } from "../../../src/services/workout.service";
 import { workoutsService } from "../../../src/services/workouts.service";
 import { progressService } from "../../../src/services/progress.service";
@@ -22,12 +22,9 @@ interface PersonalBest {
   maxWeight: number;
 }
 
-interface SessionSet {
-  id: string;
-  reps?: number;
-  duration_seconds?: number;
-  added_weight_kg?: number;
-}
+// Bu ekranin set tipi store'daki LoggedSet ile birebir aynidir. Kopyasini tutmak
+// ikisinin zamanla ayrisip tip hatasi uretmesine yol acmisti; artik tek kaynak var.
+type SessionSet = LoggedSet;
 
 function sanitizeInteger(text: string) {
   return text.replace(/[^0-9]/g, "");
