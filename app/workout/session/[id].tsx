@@ -8,6 +8,7 @@ import { useWorkoutStore } from "../../../src/store/workoutStore";
 import { workoutService } from "../../../src/services/workout.service";
 import { workoutsService } from "../../../src/services/workouts.service";
 import { progressService } from "../../../src/services/progress.service";
+import { performanceService, type PreviousPerformance } from "../../../src/services/performance.service";
 import { COLORS } from "../../../src/constants/theme";
 import { formatTarget } from "../../../src/utils/targetProgress";
 import { useSetRemoval } from "../../../src/hooks/useSetRemoval";
@@ -107,6 +108,9 @@ export default function WorkoutSessionScreen() {
   // değişmez, "hâlâ kimin en iyi olduğu" her render'da bu referansla yeniden
   // hesaplanır (bkz. computeRecordHolderIds).
   const [personalBests, setPersonalBests] = useState<Record<string, PersonalBest>>({});
+  // "Geçen sefer" referansı: bu antrenman hariç, her hareketin en son bitmiş
+  // antrenmandaki setleri.
+  const [previousPerformance, setPreviousPerformance] = useState<Record<string, PreviousPerformance>>({});
   const intervalRef = useRef<any>(null);
 
   useEffect(() => {
@@ -126,6 +130,10 @@ export default function WorkoutSessionScreen() {
         map[r.movementId] = { maxReps: r.maxReps, maxDuration: r.maxDuration, maxWeight: r.maxWeight };
       });
       setPersonalBests(map);
+      performanceService
+        .getPreviousPerformance(authSession.user.id, id)
+        .then(setPreviousPerformance)
+        .catch(() => {});
     });
   }, [authSession]);
 
@@ -307,6 +315,15 @@ export default function WorkoutSessionScreen() {
                     </View>
                   )}
 
+                  {previousPerformance[movement.movementId] && (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingBottom: 8, marginBottom: 10, borderBottomWidth: 1, borderBottomColor: COLORS.line }}>
+                      <Feather name="rotate-ccw" size={12} color={COLORS.graphite} />
+                      <Text style={{ fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, flex: 1 }}>
+                        Geçen sefer: {previousPerformance[movement.movementId].summary}
+                      </Text>
+                    </View>
+                  )}
+
                   {movement.sets.map((s, i) => {
                     const metTarget = setMeetsOwnTarget(
                       s,
@@ -454,7 +471,7 @@ const styles = StyleSheet.create({
   },
   targetChipText: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: COLORS.accent },
   setLineRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
-  setLine: { fontFamily: "Inter_400Regular", fontSize: 13, color: COLORS.graphite },
+  setLine: { fontFamily: "Inter_500Medium", fontSize: 14, color: COLORS.ink },
   setBadges: { flexDirection: "row", alignItems: "center", gap: 8 },
   targetMetBadge: { fontFamily: "Inter_700Bold", fontSize: 11, color: COLORS.graphite },
   prBadge: { fontFamily: "Inter_700Bold", fontSize: 12, color: COLORS.accent },
