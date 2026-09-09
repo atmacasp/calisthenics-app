@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase";
 import type { MovementSetLogMap, SetLogEntry } from "../types/movements";
+import { toLocalDateKey } from "../utils/date";
 
 function getMonday(weekOffset: number) {
   const d = new Date();
@@ -110,7 +111,7 @@ export const progressService = {
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
+      const key = toLocalDateKey(d);
       days.push({
         date: key,
         trained: trainedDates.has(key),
@@ -265,7 +266,7 @@ export const progressService = {
 
     const countsByDate: Record<string, number> = {};
     data?.forEach((s: any) => {
-      const key = s.workout_sessions.started_at.slice(0, 10);
+      const key = toLocalDateKey(s.workout_sessions.started_at);
       countsByDate[key] = (countsByDate[key] || 0) + 1;
     });
 
@@ -273,7 +274,7 @@ export const progressService = {
     for (let i = daysBack - 1; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
+      const key = toLocalDateKey(d);
       days.push({ date: key, count: countsByDate[key] ?? 0 });
     }
     return days;

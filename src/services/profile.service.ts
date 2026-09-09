@@ -1,8 +1,5 @@
 import { supabase, withAuthRetry } from "../lib/supabase";
-
-function getDateString(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
+import { toLocalDateKey, todayLocalKey } from "../utils/date";
 
 export const profileService = {
   async getProfile(userId: string) {
@@ -17,10 +14,15 @@ export const profileService = {
     if (error) throw error;
     return data;
   },
+  /**
+   * Seri hesabı kullanıcının YEREL gününe göre yapılır. Eskiden UTC kullanılıyordu;
+   * gece yapılan antrenman bir önceki güne yazıldığı için seri hem fazla hem eksik
+   * sayabiliyordu.
+   */
   async updateStreakOnWorkoutComplete(userId: string) {
     const profile = await this.getProfile(userId);
-    const today = getDateString(new Date());
-    const yesterday = getDateString(new Date(Date.now() - 86400000));
+    const today = todayLocalKey();
+    const yesterday = toLocalDateKey(new Date(Date.now() - 86400000));
 
     if (profile.last_workout_date === today) {
       return profile;
