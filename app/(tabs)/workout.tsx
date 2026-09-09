@@ -26,6 +26,8 @@ export default function WorkoutScreen() {
   const [suggestions, setSuggestions] = useState<FocusSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [startingId, setStartingId] = useState<string | null>(null);
+  // Hic set kaydi yoksa "siradaki hedefin" demek olmayan bir gecmise atif olur.
+  const [isNewUser, setIsNewUser] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!userId) return;
@@ -35,6 +37,7 @@ export default function WorkoutScreen() {
         progressService.getMovementSetLogs(userId),
       ]);
       setSuggestions(computeFocusSuggestions(movements, setLogMap));
+      setIsNewUser(Object.keys(setLogMap).length === 0);
     } finally {
       setLoading(false);
     }
@@ -149,8 +152,8 @@ export default function WorkoutScreen() {
         </View>
       )}
 
-      <Text style={styles.sectionHeader}>Sırada Bu Var</Text>
-      <Text style={styles.sectionSubtitle}>Her kategoride bir sonraki hedefin</Text>
+      <Text style={styles.sectionHeader}>{isNewUser ? "Buradan Başla" : "Sırada Bu Var"}</Text>
+      <Text style={styles.sectionSubtitle}>{isNewUser ? "Kilidi açık ilk hedefin. Diğer kategoriler Temel Güç hedeflerini tamamladıkça açılır." : "Her kategoride bir sonraki hedefin"}</Text>
 
       {loading && (
         <View style={styles.loadingBox}>

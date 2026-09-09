@@ -1,13 +1,29 @@
-import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Alert,
+  StyleSheet,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from "react-native";
 import { useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Link, router } from "expo-router";
+import { router } from "expo-router";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { loginSchema, LoginFormData } from "../../src/validation/auth.schema";
 import { authService } from "../../src/services/auth.service";
+import { COLORS } from "../../src/constants/theme";
+
+const DANGER = "#dc2626";
 
 export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const { control, handleSubmit, formState: { errors } } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
@@ -17,6 +33,8 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await authService.signIn(data.email, data.password);
+      // onboarding_completed kontrolü app/index.tsx'te yapılıyor; doğrudan
+      // /(tabs)'a gitmek onu atlıyordu.
       router.replace("/");
     } catch (error: any) {
       Alert.alert("Giriş Hatası", error.message ?? "Bir hata oluştu");
@@ -26,43 +44,139 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Giriş Yap</Text>
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <View style={styles.brandMark}>
+          <MaterialCommunityIcons name="dumbbell" size={26} color={COLORS.accent} />
+        </View>
+        <Text style={styles.title}>Tekrar hoş geldin</Text>
+        <Text style={styles.subtitle}>Kaldığın yerden devam et.</Text>
 
-      <Controller
-        control={control}
-        name="email"
-        render={({ field: { onChange, value } }) => (
-          <TextInput style={styles.input} placeholder="E-posta" autoCapitalize="none" keyboardType="email-address" value={value} onChangeText={onChange} />
-        )}
-      />
-      {errors.email && <Text style={styles.error}>{errors.email.message}</Text>}
+        <Text style={styles.label}>E-posta</Text>
+        <Controller
+          control={control}
+          name="email"
+          render={({ field: { onChange, value } }) => (
+            <TextInput
+              style={[styles.input, errors.email && styles.inputError]}
+              placeholder="ornek@eposta.com"
+              placeholderTextColor={COLORS.graphite}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              value={value}
+              onChangeText={onChange}
+            />
+          )}
+        />
+        {errors.email && <Text style={styles.error}>{errors.email.message}</Text>}
 
-      <Controller
-        control={control}
-        name="password"
-        render={({ field: { onChange, value } }) => (
-          <TextInput style={styles.input} placeholder="Şifre" secureTextEntry value={value} onChangeText={onChange} />
-        )}
-      />
-      {errors.password && <Text style={styles.error}>{errors.password.message}</Text>}
+        <Text style={styles.label}>Şifre</Text>
+        <View style={[styles.inputRow, errors.password && styles.inputError]}>
+          <Controller
+            control={control}
+            name="password"
+            render={({ field: { onChange, value } }) => (
+              <TextInput
+                style={styles.inputInner}
+                placeholder="••••••••"
+                placeholderTextColor={COLORS.graphite}
+                secureTextEntry={!showPassword}
+                value={value}
+                onChangeText={onChange}
+              />
+            )}
+          />
+          <TouchableOpacity onPress={() => setShowPassword((v) => !v)} hitSlop={10}>
+            <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={COLORS.graphite} />
+          </TouchableOpacity>
+        </View>
+        {errors.password && <Text style={styles.error}>{errors.password.message}</Text>}
 
-      <TouchableOpacity style={styles.button} onPress={handleSubmit(onSubmit)} disabled={loading}>
-        <Text style={styles.buttonText}>{loading ? "Giriş yapılıyor..." : "Giriş Yap"}</Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={handleSubmit(onSubmit)}
+          disabled={loading}
+          activeOpacity={0.85}
+        >
+          {loading ? (
+            <ActivityIndicator size="small" color={COLORS.white} />
+          ) : (
+            <Text style={styles.buttonText}>Giriş Yap</Text>
+          )}
+        </TouchableOpacity>
 
-      <Link href="/(auth)/forgot-password" style={styles.link}><Text>Şifremi Unuttum</Text></Link>
-      <Link href="/(auth)/register" style={styles.link}><Text>Hesabın yok mu? Kayıt Ol</Text></Link>
-    </View>
+        <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/(auth)/forgot-password")}>
+          <Text style={styles.linkMuted}>Şifremi unuttum</Text>
+        </TouchableOpacity>
+
+        <View style={styles.divider} />
+
+        <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/(auth)/register")}>
+          <Text style={styles.linkMuted}>
+            Hesabın yok mu? <Text style={styles.linkAccent}>Kayıt Ol</Text>
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 24 },
-  title: { fontSize: 28, fontWeight: "bold", marginBottom: 32, textAlign: "center" },
-  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 12, marginBottom: 8 },
-  error: { color: "red", marginBottom: 8, fontSize: 12 },
-  button: { backgroundColor: "#22c55e", padding: 16, borderRadius: 8, marginTop: 16 },
-  buttonText: { color: "white", textAlign: "center", fontWeight: "600" },
-  link: { marginTop: 16, alignItems: "center" },
+  flex: { flex: 1, backgroundColor: COLORS.paper },
+  content: { flexGrow: 1, justifyContent: "center", padding: 24 },
+  brandMark: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: COLORS.ink,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
+  title: { fontFamily: "Inter_700Bold", fontSize: 26, color: COLORS.ink },
+  subtitle: { fontFamily: "Inter_400Regular", fontSize: 14, color: COLORS.graphite, marginTop: 4, marginBottom: 28 },
+  label: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: COLORS.ink, marginBottom: 6, marginTop: 14 },
+  input: {
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    borderRadius: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    fontFamily: "Inter_400Regular",
+    fontSize: 15,
+    color: COLORS.ink,
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+  },
+  inputInner: {
+    flex: 1,
+    paddingVertical: 13,
+    fontFamily: "Inter_400Regular",
+    fontSize: 15,
+    color: COLORS.ink,
+  },
+  inputError: { borderColor: DANGER },
+  error: { fontFamily: "Inter_400Regular", fontSize: 12, color: DANGER, marginTop: 6 },
+  button: {
+    backgroundColor: COLORS.accent,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: "center",
+    marginTop: 28,
+  },
+  buttonText: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.white },
+  linkRow: { alignItems: "center", marginTop: 18 },
+  linkMuted: { fontFamily: "Inter_500Medium", fontSize: 13, color: COLORS.graphite },
+  linkAccent: { fontFamily: "Inter_700Bold", color: COLORS.accent },
+  divider: { height: 1, backgroundColor: COLORS.line, marginTop: 24 },
 });
