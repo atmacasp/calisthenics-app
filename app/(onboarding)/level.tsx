@@ -6,7 +6,7 @@ import { useOnboardingStore } from "../../src/store/onboardingStore";
 import { useAuthStore } from "../../src/store/authStore";
 import { profileService } from "../../src/services/profile.service";
 import { bodyWeightService } from "../../src/services/bodyweight.service";
-import { COLORS } from "../../src/constants/theme";
+import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 
 type Level = "beginner" | "intermediate" | "advanced";
 
@@ -29,6 +29,8 @@ const LEVELS: { value: Level; label: string; description: string }[] = [
 ];
 
 export default function LevelScreen() {
+  const COLORS = useColors();
+  const styles = getStyles(COLORS);
   const [level, setLevel] = useState<Level | null>(null);
   const [loading, setLoading] = useState(false);
   const onboardingData = useOnboardingStore((s) => s);
@@ -102,7 +104,7 @@ export default function LevelScreen() {
         activeOpacity={0.85}
       >
         {loading ? (
-          <ActivityIndicator size="small" color={COLORS.white} />
+          <ActivityIndicator size="small" color={COLORS.onAccent} />
         ) : (
           <Text style={styles.buttonText}>Tamamla</Text>
         )}
@@ -116,7 +118,8 @@ export default function LevelScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = themedStyles((COLORS: ThemeColors) =>
+  StyleSheet.create({
   flex: { flex: 1, backgroundColor: COLORS.paper },
   content: { flexGrow: 1, justifyContent: "center", padding: 24, paddingVertical: 40 },
   stepRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 18 },
@@ -135,7 +138,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.line,
     borderRadius: 16,
@@ -160,7 +163,8 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   buttonDisabled: { backgroundColor: COLORS.line },
-  buttonText: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.white },
+  buttonText: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.onAccent },
   backRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 18 },
   backText: { fontFamily: "Inter_500Medium", fontSize: 13, color: COLORS.graphite },
-});
+  })
+);

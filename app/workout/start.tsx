@@ -4,9 +4,10 @@ import { router } from "expo-router";
 import { useAuthStore } from "../../src/store/authStore";
 import { useWorkoutStore } from "../../src/store/workoutStore";
 import { workoutService } from "../../src/services/workout.service";
-import { COLORS } from "../../src/constants/theme";
+import { useColors } from "../../src/constants/theme";
 
 export default function WorkoutStartScreen() {
+  const COLORS = useColors();
   const session = useAuthStore((s) => s.session);
   const startSession = useWorkoutStore((s) => s.startSession);
   const restoreSession = useWorkoutStore((s) => s.restoreSession);

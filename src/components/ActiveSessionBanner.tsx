@@ -4,7 +4,7 @@ import { useCallback } from "react";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useActiveSession } from "../hooks/useActiveSession";
-import { COLORS } from "../constants/theme";
+import { COLORS, themedStyles, useColors, type ThemeColors } from "../constants/theme";
 
 function elapsedLabel(startedAt: string) {
   const minutes = Math.floor((Date.now() - new Date(startedAt).getTime()) / 60000);
@@ -27,6 +27,8 @@ export function ActiveSessionBanner({
   userId?: string;
   style?: StyleProp<ViewStyle>;
 }) {
+  const COLORS = useColors();
+  const styles = getStyles(COLORS);
   const { pending, busy, reload, resume, discard } = useActiveSession(userId);
 
   useFocusEffect(
@@ -72,9 +74,10 @@ export function ActiveSessionBanner({
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = themedStyles((COLORS: ThemeColors) =>
+  StyleSheet.create({
   banner: {
-    backgroundColor: COLORS.ink,
+    backgroundColor: COLORS.inverse,
     borderRadius: 18,
     marginHorizontal: 20,
     marginTop: 16,
@@ -91,7 +94,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   discardButton: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
-  detail: { fontFamily: "Inter_700Bold", fontSize: 17, color: COLORS.paper, marginTop: 8 },
+  detail: { fontFamily: "Inter_700Bold", fontSize: 17, color: COLORS.onInverse, marginTop: 8 },
   meta: { fontFamily: "Inter_400Regular", fontSize: 12, color: "rgba(250,249,246,0.55)", marginTop: 2 },
   resumeButton: {
     flexDirection: "row",
@@ -104,4 +107,5 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   resumeText: { fontFamily: "Inter_700Bold", fontSize: 14, color: COLORS.ink },
-});
+  })
+);

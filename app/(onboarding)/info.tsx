@@ -16,11 +16,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { onboardingInfoSchema, OnboardingInfoData } from "../../src/validation/onboarding.schema";
 import { toMetricHeight, toMetricWeight } from "../../src/utils/unitConversion";
 import { useOnboardingStore } from "../../src/store/onboardingStore";
-import { COLORS } from "../../src/constants/theme";
-
-const DANGER = "#dc2626";
+import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 
 export default function InfoScreen() {
+  const COLORS = useColors();
+  const styles = getStyles(COLORS);
   const [unit, setUnit] = useState<"metric" | "imperial">("metric");
   const setInfo = useOnboardingStore((s) => s.setInfo);
 
@@ -135,14 +135,15 @@ export default function InfoScreen() {
 
         <TouchableOpacity style={styles.button} onPress={handleSubmit(onSubmit)} activeOpacity={0.85}>
           <Text style={styles.buttonText}>Devam Et</Text>
-          <Ionicons name="arrow-forward" size={18} color={COLORS.white} />
+          <Ionicons name="arrow-forward" size={18} color={COLORS.onAccent} />
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = themedStyles((COLORS: ThemeColors) =>
+  StyleSheet.create({
   flex: { flex: 1, backgroundColor: COLORS.paper },
   content: { flexGrow: 1, justifyContent: "center", padding: 24, paddingVertical: 40 },
   stepRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 18 },
@@ -160,7 +161,7 @@ const styles = StyleSheet.create({
   },
   label: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: COLORS.ink, marginBottom: 6, marginTop: 14 },
   input: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.line,
     borderRadius: 12,
@@ -170,21 +171,21 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: COLORS.ink,
   },
-  inputError: { borderColor: DANGER },
-  error: { fontFamily: "Inter_400Regular", fontSize: 12, color: DANGER, marginTop: 6 },
+  inputError: { borderColor: COLORS.warn },
+  error: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.warn, marginTop: 6 },
   unitRow: { flexDirection: "row", gap: 8 },
   unitButton: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: "center",
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.line,
   },
   unitButtonActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
   unitText: { fontFamily: "Inter_500Medium", fontSize: 13, color: COLORS.ink },
-  unitTextActive: { color: COLORS.white, fontFamily: "Inter_700Bold" },
+  unitTextActive: { color: COLORS.onAccent, fontFamily: "Inter_700Bold" },
   measureRow: { flexDirection: "row", gap: 12 },
   measureCol: { flex: 1 },
   hint: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, marginTop: 14, lineHeight: 18 },
@@ -198,5 +199,6 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     marginTop: 28,
   },
-  buttonText: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.white },
-});
+  buttonText: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.onAccent },
+  })
+);

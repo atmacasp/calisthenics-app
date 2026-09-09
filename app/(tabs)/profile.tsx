@@ -7,9 +7,7 @@ import { useThemeStore } from "../../src/store/themeStore";
 import { profileService, type ProfileUpdate } from "../../src/services/profile.service";
 import { authService } from "../../src/services/auth.service";
 import { notificationsService, describeReminders } from "../../src/services/notifications.service";
-import { COLORS } from "../../src/constants/theme";
-
-const DANGER = "#dc2626";
+import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 
 const LEVEL_LABELS: Record<string, string> = {
   beginner: "Başlangıç",
@@ -20,6 +18,8 @@ const LEVEL_LABELS: Record<string, string> = {
 const REMINDER_HOURS = [6, 7, 8, 9, 12, 17, 18, 19, 20, 21, 22];
 
 export default function ProfileScreen() {
+  const COLORS = useColors();
+  const styles = getStyles(COLORS);
   const session = useAuthStore((s) => s.session);
   const themePreference = useThemeStore((s) => s.preference);
   const setThemePreference = useThemeStore((s) => s.setPreference);
@@ -266,7 +266,7 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         ))}
       </View>
-      <Text style={styles.helperText}>Koyu tema hazırlanıyor — şu an tüm ekranlar açık temada.</Text>
+      <Text style={styles.helperText}>Sistem seçiliyken telefonunun görünüm ayarını izler.</Text>
 
       <Text style={styles.sectionTitle}>Dil</Text>
       <View style={styles.rowButtons}>
@@ -298,7 +298,8 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = themedStyles((COLORS: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.paper },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.paper },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -306,7 +307,7 @@ const styles = StyleSheet.create({
   identityCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 20,
     padding: 16,
     marginTop: 16,
@@ -341,7 +342,7 @@ const styles = StyleSheet.create({
   miniStatsRow: { flexDirection: "row", gap: 8, marginTop: 12 },
   miniStatBox: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 12,
     alignItems: "center",
@@ -357,7 +358,7 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: 12,
     alignItems: "center",
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.line,
   },
@@ -366,20 +367,20 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     borderRadius: 12,
     alignItems: "center",
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.line,
   },
   optionActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
   optionText: { fontFamily: "Inter_500Medium", fontSize: 14, color: COLORS.ink },
   optionTextSmall: { fontFamily: "Inter_500Medium", fontSize: 13, color: COLORS.ink },
-  optionTextActive: { color: COLORS.white, fontFamily: "Inter_700Bold" },
+  optionTextActive: { color: COLORS.onAccent, fontFamily: "Inter_700Bold" },
   helperText: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.graphite, marginTop: 8 },
   switchRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
@@ -402,11 +403,12 @@ const styles = StyleSheet.create({
     marginTop: 36,
     paddingVertical: 15,
     borderRadius: 14,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.line,
   },
   signOutText: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: COLORS.ink },
   deleteButton: { marginTop: 10, paddingVertical: 15, borderRadius: 14, alignItems: "center" },
-  deleteText: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: DANGER },
-});
+  deleteText: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.warn },
+  })
+);

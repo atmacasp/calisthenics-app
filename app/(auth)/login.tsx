@@ -17,11 +17,11 @@ import { router } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { loginSchema, LoginFormData } from "../../src/validation/auth.schema";
 import { authService } from "../../src/services/auth.service";
-import { COLORS } from "../../src/constants/theme";
-
-const DANGER = "#dc2626";
+import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 
 export default function LoginScreen() {
+  const COLORS = useColors();
+  const styles = getStyles(COLORS);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const { control, handleSubmit, formState: { errors } } = useForm<LoginFormData>({
@@ -100,7 +100,7 @@ export default function LoginScreen() {
           activeOpacity={0.85}
         >
           {loading ? (
-            <ActivityIndicator size="small" color={COLORS.white} />
+            <ActivityIndicator size="small" color={COLORS.onAccent} />
           ) : (
             <Text style={styles.buttonText}>Giriş Yap</Text>
           )}
@@ -122,14 +122,15 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = themedStyles((COLORS: ThemeColors) =>
+  StyleSheet.create({
   flex: { flex: 1, backgroundColor: COLORS.paper },
   content: { flexGrow: 1, justifyContent: "center", padding: 24 },
   brandMark: {
     width: 56,
     height: 56,
     borderRadius: 18,
-    backgroundColor: COLORS.ink,
+    backgroundColor: COLORS.inverse,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 20,
@@ -138,7 +139,7 @@ const styles = StyleSheet.create({
   subtitle: { fontFamily: "Inter_400Regular", fontSize: 14, color: COLORS.graphite, marginTop: 4, marginBottom: 28 },
   label: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: COLORS.ink, marginBottom: 6, marginTop: 14 },
   input: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.line,
     borderRadius: 12,
@@ -152,7 +153,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.line,
     borderRadius: 12,
@@ -165,8 +166,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: COLORS.ink,
   },
-  inputError: { borderColor: DANGER },
-  error: { fontFamily: "Inter_400Regular", fontSize: 12, color: DANGER, marginTop: 6 },
+  inputError: { borderColor: COLORS.warn },
+  error: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.warn, marginTop: 6 },
   button: {
     backgroundColor: COLORS.accent,
     borderRadius: 14,
@@ -174,9 +175,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 28,
   },
-  buttonText: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.white },
+  buttonText: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.onAccent },
   linkRow: { alignItems: "center", marginTop: 18 },
   linkMuted: { fontFamily: "Inter_500Medium", fontSize: 13, color: COLORS.graphite },
   linkAccent: { fontFamily: "Inter_700Bold", color: COLORS.accent },
   divider: { height: 1, backgroundColor: COLORS.line, marginTop: 24 },
-});
+  })
+);

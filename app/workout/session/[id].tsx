@@ -10,7 +10,7 @@ import { workoutService } from "../../../src/services/workout.service";
 import { workoutsService } from "../../../src/services/workouts.service";
 import { progressService } from "../../../src/services/progress.service";
 import { performanceService, type PreviousPerformance } from "../../../src/services/performance.service";
-import { COLORS } from "../../../src/constants/theme";
+import { COLORS, themedStyles, useColors, type ThemeColors } from "../../../src/constants/theme";
 import { formatTarget } from "../../../src/utils/targetProgress";
 import { useSetRemoval } from "../../../src/hooks/useSetRemoval";
 
@@ -89,6 +89,8 @@ function setMeetsOwnTarget(
 }
 
 export default function WorkoutSessionScreen() {
+  const COLORS = useColors();
+  const styles = getStyles(COLORS);
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const authSession = useAuthStore((s) => s.session);
@@ -544,7 +546,8 @@ export default function WorkoutSessionScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = themedStyles((COLORS: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.paper },
   header: {
     flexDirection: "row",
@@ -574,18 +577,18 @@ const styles = StyleSheet.create({
 
     borderRadius: 16,
     overflow: "hidden",
-    shadowColor: COLORS.ink,
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.18,
     shadowRadius: 12,
     elevation: 6,
-    backgroundColor: COLORS.ink,
+    backgroundColor: COLORS.inverse,
     padding: 12,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  restText: { color: COLORS.white, fontFamily: "Inter_700Bold", fontSize: 14 },
+  restText: { color: COLORS.onAccent, fontFamily: "Inter_700Bold", fontSize: 14 },
   skipText: { color: COLORS.accent, fontFamily: "Inter_600SemiBold", fontSize: 14 },
   restTrack: { position: "absolute", left: 0, right: 0, bottom: 0, height: 3, backgroundColor: "rgba(250,249,246,0.15)" },
   restFill: { height: 3, backgroundColor: COLORS.accent },
@@ -596,11 +599,11 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
   },
   card: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 16,
     marginBottom: 16,
-    shadowColor: COLORS.ink,
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 8,
@@ -641,7 +644,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
   },
   saveButton: { backgroundColor: COLORS.accent, padding: 12, borderRadius: 10, marginTop: 10 },
-  saveButtonText: { color: COLORS.white, textAlign: "center", fontFamily: "Inter_700Bold", fontSize: 14 },
+  saveButtonText: { color: COLORS.onAccent, textAlign: "center", fontFamily: "Inter_700Bold", fontSize: 14 },
   addButton: {
     borderWidth: 1,
     borderColor: COLORS.accent,
@@ -654,7 +657,7 @@ const styles = StyleSheet.create({
   notesBox: { marginTop: 20 },
   notesLabel: { fontFamily: "Inter_700Bold", fontSize: 13, color: COLORS.ink, marginBottom: 8 },
   notesInput: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.line,
     borderRadius: 12,
@@ -673,6 +676,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 20,
   },
-  finishButton: { backgroundColor: COLORS.ink, borderRadius: 16, paddingVertical: 16 },
-  finishButtonText: { color: COLORS.white, textAlign: "center", fontFamily: "Inter_700Bold", fontSize: 16 },
-});
+  finishButton: { backgroundColor: COLORS.inverse, borderRadius: 16, paddingVertical: 16 },
+  finishButtonText: { color: COLORS.onAccent, textAlign: "center", fontFamily: "Inter_700Bold", fontSize: 16 },
+  })
+);

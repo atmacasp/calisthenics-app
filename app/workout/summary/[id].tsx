@@ -11,7 +11,7 @@ import { programsService } from "../../../src/services/programs.service";
 import { computeWorkoutAchievements, type WorkoutAchievements } from "../../../src/utils/workoutSummary";
 import { computeProgramUpgrades, type ProgramUpgrade } from "../../../src/utils/programUpgrades";
 import type { WorkoutSessionDetail } from "../../../src/types/workouts";
-import { COLORS } from "../../../src/constants/theme";
+import { COLORS, themedStyles, useColors, type ThemeColors } from "../../../src/constants/theme";
 
 /** Aktif programda, bu antrenmanda tamamlanan hedeflerden doğan terfi önerileri. */
 interface ProgramUpgradeState {
@@ -31,6 +31,8 @@ function formatDuration(startedAt: string, endedAt: string | null): string {
 }
 
 export default function WorkoutSummaryScreen() {
+  const COLORS = useColors();
+  const styles = getStyles(COLORS);
   const { id } = useLocalSearchParams<{ id: string }>();
   const userId = useAuthStore((s) => s.session?.user.id);
 
@@ -179,7 +181,7 @@ export default function WorkoutSummaryScreen() {
               onPress={() => router.push(`/movement/${m.id}`)}
             >
               <View style={styles.achievementIcon}>
-                <Ionicons name="trophy" size={18} color={COLORS.white} />
+                <Ionicons name="trophy" size={18} color={COLORS.onAccent} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.achievementCategory}>{m.groupName}</Text>
@@ -201,7 +203,7 @@ export default function WorkoutSummaryScreen() {
               activeOpacity={0.75}
               onPress={() => router.push(`/movement/${m.id}`)}
             >
-              <View style={[styles.achievementIcon, { backgroundColor: COLORS.ink }]}>
+              <View style={[styles.achievementIcon, { backgroundColor: COLORS.inverse }]}>
                 <Ionicons name="lock-open" size={18} color={COLORS.accent} />
               </View>
               <View style={{ flex: 1 }}>
@@ -287,11 +289,12 @@ export default function WorkoutSummaryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = themedStyles((COLORS: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.paper },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.paper },
   content: { padding: 20, paddingTop: 60, paddingBottom: 40 },
-  hero: { backgroundColor: COLORS.ink, borderRadius: 24, padding: 22, alignItems: "center" },
+  hero: { backgroundColor: COLORS.inverse, borderRadius: 24, padding: 22, alignItems: "center" },
   checkCircle: {
     width: 56,
     height: 56,
@@ -300,16 +303,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  heroTitle: { fontFamily: "Inter_700Bold", fontSize: 20, color: COLORS.paper, marginTop: 14 },
+  heroTitle: { fontFamily: "Inter_700Bold", fontSize: 20, color: COLORS.onInverse, marginTop: 14 },
   heroStreak: { fontFamily: "Inter_500Medium", fontSize: 13, color: COLORS.accent, marginTop: 4 },
   statRow: { flexDirection: "row", alignItems: "center", marginTop: 20, alignSelf: "stretch" },
   statCol: { flex: 1, alignItems: "center" },
   statDivider: { width: 1, height: 30, backgroundColor: "rgba(250,249,246,0.15)" },
-  statNumber: { fontFamily: "BebasNeue_400Regular", fontSize: 24, color: COLORS.paper },
+  statNumber: { fontFamily: "BebasNeue_400Regular", fontSize: 24, color: COLORS.onInverse },
   statLabel: { fontFamily: "Inter_400Regular", fontSize: 11, color: "rgba(250,249,246,0.55)", marginTop: 2 },
   sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 15, color: COLORS.ink, marginTop: 26, marginBottom: 10 },
   programCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: COLORS.line,
@@ -337,14 +340,14 @@ const styles = StyleSheet.create({
   programArrow: { color: COLORS.accent },
   programTarget: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, marginTop: 2 },
   programButton: { backgroundColor: COLORS.accent, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
-  programButtonText: { fontFamily: "Inter_700Bold", fontSize: 13, color: COLORS.white },
+  programButtonText: { fontFamily: "Inter_700Bold", fontSize: 13, color: COLORS.onAccent },
   programHintRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 },
   programHint: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, lineHeight: 17 },
   achievementCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(34,197,94,0.3)",
@@ -372,7 +375,7 @@ const styles = StyleSheet.create({
   plainBox: {
     flexDirection: "row",
     gap: 12,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: COLORS.line,
@@ -387,7 +390,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 28,
   },
-  doneButtonText: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.white },
+  doneButtonText: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.onAccent },
   secondaryLink: { alignItems: "center", marginTop: 14 },
   secondaryLinkText: { fontFamily: "Inter_500Medium", fontSize: 13, color: COLORS.graphite, textDecorationLine: "underline" },
-});
+  })
+);

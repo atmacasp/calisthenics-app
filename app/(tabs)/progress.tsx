@@ -8,10 +8,8 @@ import { progressService } from "../../src/services/progress.service";
 import { bodyWeightService } from "../../src/services/bodyweight.service";
 import { useWeightLog } from "../../src/hooks/useWeightLog";
 import { programsService } from "../../src/services/programs.service";
-import { COLORS } from "../../src/constants/theme";
+import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 import type { ProgramAdherence } from "../../src/types/programs";
-
-const WARN = "#dc2626";
 
 const SEGMENTS = [
   { key: "genel", label: "Genel", icon: "apps-outline" },
@@ -20,7 +18,8 @@ const SEGMENTS = [
   { key: "vucut", label: "Vücut", icon: "body-outline" },
 ] as const;
 
-function heatColor(count: number) {
+// Bilesen degil, hook cagiramaz - palet disaridan veriliyor.
+function heatColor(count: number, COLORS: ThemeColors) {
   if (count === 0) return { backgroundColor: COLORS.line };
   if (count <= 2) return { backgroundColor: "rgba(34,197,94,0.35)" };
   if (count <= 5) return { backgroundColor: "rgba(34,197,94,0.65)" };
@@ -33,6 +32,8 @@ function barHeight(value: number, max: number) {
 }
 
 export default function ProgressScreen() {
+  const COLORS = useColors();
+  const styles = getStyles(COLORS);
   const session = useAuthStore((s) => s.session);
   const [segment, setSegment] = useState<(typeof SEGMENTS)[number]["key"]>("genel");
   const [loading, setLoading] = useState(true);
@@ -135,7 +136,7 @@ export default function ProgressScreen() {
             style={[styles.segmentPill, segment === s.key && styles.segmentPillActive]}
             onPress={() => setSegment(s.key)}
           >
-            <Ionicons name={s.icon as any} size={14} color={segment === s.key ? COLORS.white : COLORS.graphite} />
+            <Ionicons name={s.icon as any} size={14} color={segment === s.key ? COLORS.onAccent : COLORS.graphite} />
             <Text style={[styles.segmentLabel, segment === s.key && styles.segmentLabelActive]}>{s.label}</Text>
           </TouchableOpacity>
         ))}
@@ -200,15 +201,15 @@ export default function ProgressScreen() {
           <View style={styles.heatmapPanel}>
             <View style={styles.heatmapGrid}>
               {heatmap.map((d) => (
-                <View key={d.date} style={[styles.heatmapCell, heatColor(d.count)]} />
+                <View key={d.date} style={[styles.heatmapCell, heatColor(d.count, COLORS)]} />
               ))}
             </View>
             <View style={styles.heatmapLegendRow}>
               <Text style={styles.heatmapLegendText}>Az</Text>
-              <View style={[styles.heatmapCell, heatColor(0)]} />
-              <View style={[styles.heatmapCell, heatColor(1)]} />
-              <View style={[styles.heatmapCell, heatColor(3)]} />
-              <View style={[styles.heatmapCell, heatColor(6)]} />
+              <View style={[styles.heatmapCell, heatColor(0, COLORS)]} />
+              <View style={[styles.heatmapCell, heatColor(1, COLORS)]} />
+              <View style={[styles.heatmapCell, heatColor(3, COLORS)]} />
+              <View style={[styles.heatmapCell, heatColor(6, COLORS)]} />
               <Text style={styles.heatmapLegendText}>Çok</Text>
             </View>
           </View>
@@ -227,7 +228,7 @@ export default function ProgressScreen() {
               <Text style={styles.volumeSummaryLabel}>en yüksek hafta</Text>
             </View>
             <View style={styles.volumeSummaryBox}>
-              <Text style={[styles.volumeSummaryNumber, weeklyTrend < 0 && { color: WARN }]}>
+              <Text style={[styles.volumeSummaryNumber, weeklyTrend < 0 && { color: COLORS.warn }]}>
                 {weeklyTrend > 0 ? `+${weeklyTrend}` : weeklyTrend}
               </Text>
               <Text style={styles.volumeSummaryLabel}>haftalık trend</Text>
@@ -305,14 +306,14 @@ export default function ProgressScreen() {
           {weights.length > 0 ? (
             <>
               <TouchableOpacity
-                style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.line, borderRadius: 12, padding: 12, marginBottom: 12 }}
+                style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.line, borderRadius: 12, padding: 12, marginBottom: 12 }}
                 activeOpacity={0.7}
                 onPress={() => confirmRemoveWeight(weightLogs[weightLogs.length - 1], loadData)}
               >
                 <Text style={{ fontFamily: "Inter_400Regular", fontSize: 13, color: COLORS.graphite }}>
                   Son kayıt: {lastWeight} kg · {weightLogs[weightLogs.length - 1]?.logged_at}
                 </Text>
-                <Ionicons name="close" size={16} color={WARN} />
+                <Ionicons name="close" size={16} color={COLORS.warn} />
               </TouchableOpacity>
 
               <View style={styles.weightSummaryRow}>
@@ -321,7 +322,7 @@ export default function ProgressScreen() {
                   <Text style={styles.weightSummaryLabel}>güncel (kg)</Text>
                 </View>
                 <View style={styles.weightSummaryBox}>
-                  <Text style={[styles.weightSummaryNumber, weightDelta > 0 ? { color: WARN } : weightDelta < 0 ? { color: COLORS.accent } : null]}>
+                  <Text style={[styles.weightSummaryNumber, weightDelta > 0 ? { color: COLORS.warn } : weightDelta < 0 ? { color: COLORS.accent } : null]}>
                     {weightDelta > 0 ? `+${weightDelta}` : weightDelta}
                   </Text>
                   <Text style={styles.weightSummaryLabel}>ilk kayıttan beri</Text>
@@ -356,17 +357,18 @@ export default function ProgressScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = themedStyles((COLORS: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.paper },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.paper },
   header: { fontFamily: "Inter_700Bold", fontSize: 24, color: COLORS.ink },
-  segmentPill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, height: 34, borderRadius: 17, backgroundColor: COLORS.white, marginRight: 8, borderWidth: 1, borderColor: COLORS.line },
+  segmentPill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, height: 34, borderRadius: 17, backgroundColor: COLORS.surface, marginRight: 8, borderWidth: 1, borderColor: COLORS.line },
   segmentPillActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
   segmentLabel: { fontFamily: "Inter_500Medium", fontSize: 12, color: COLORS.graphite },
-  segmentLabelActive: { color: COLORS.white, fontFamily: "Inter_700Bold" },
+  segmentLabelActive: { color: COLORS.onAccent, fontFamily: "Inter_700Bold" },
   sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 15, color: COLORS.ink, marginBottom: 12, marginTop: 4 },
   adherenceCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
@@ -389,31 +391,31 @@ const styles = StyleSheet.create({
   adherenceBarTrack: { height: 6, borderRadius: 3, backgroundColor: COLORS.line, overflow: "hidden", marginTop: 14 },
   adherenceBarFill: { height: 6, borderRadius: 3, backgroundColor: COLORS.accent },
   streakRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
-  streakBox: { flex: 1, backgroundColor: COLORS.white, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: COLORS.line },
+  streakBox: { flex: 1, backgroundColor: COLORS.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: COLORS.line },
   streakBoxNumber: { fontFamily: "BebasNeue_400Regular", fontSize: 34, color: COLORS.accent },
   streakBoxLabel: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.graphite, marginTop: 2 },
-  statsCard: { flexDirection: "row", backgroundColor: COLORS.white, borderRadius: 16, paddingVertical: 16, marginBottom: 24, borderWidth: 1, borderColor: COLORS.line },
+  statsCard: { flexDirection: "row", backgroundColor: COLORS.surface, borderRadius: 16, paddingVertical: 16, marginBottom: 24, borderWidth: 1, borderColor: COLORS.line },
   statCol: { flex: 1, alignItems: "center" },
   statDivider: { width: 1, backgroundColor: COLORS.line },
   statNumber: { fontFamily: "BebasNeue_400Regular", fontSize: 24, color: COLORS.ink },
   statNumberWord: { fontFamily: "Inter_700Bold", fontSize: 13, color: COLORS.ink },
   statLabel: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.graphite, marginTop: 4 },
-  heatmapPanel: { backgroundColor: COLORS.white, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: COLORS.line },
+  heatmapPanel: { backgroundColor: COLORS.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: COLORS.line },
   heatmapGrid: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
   heatmapCell: { width: 12, height: 12, borderRadius: 3 },
   heatmapLegendRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 14 },
   heatmapLegendText: { fontFamily: "Inter_400Regular", fontSize: 10, color: COLORS.graphite, marginHorizontal: 2 },
   volumeSummaryRow: { flexDirection: "row", gap: 8, marginBottom: 20 },
-  volumeSummaryBox: { flex: 1, backgroundColor: COLORS.white, borderRadius: 14, padding: 12, alignItems: "center", borderWidth: 1, borderColor: COLORS.line },
+  volumeSummaryBox: { flex: 1, backgroundColor: COLORS.surface, borderRadius: 14, padding: 12, alignItems: "center", borderWidth: 1, borderColor: COLORS.line },
   volumeSummaryNumber: { fontFamily: "BebasNeue_400Regular", fontSize: 22, color: COLORS.ink },
   volumeSummaryLabel: { fontFamily: "Inter_400Regular", fontSize: 10, color: COLORS.graphite, marginTop: 2, textAlign: "center" },
-  barChartPanel: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", backgroundColor: COLORS.white, borderRadius: 16, padding: 16, paddingTop: 24, height: 180, borderWidth: 1, borderColor: COLORS.line },
+  barChartPanel: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", backgroundColor: COLORS.surface, borderRadius: 16, padding: 16, paddingTop: 24, height: 180, borderWidth: 1, borderColor: COLORS.line },
   barCol: { flex: 1, alignItems: "center", justifyContent: "flex-end", height: "100%" },
   barValue: { fontFamily: "Inter_600SemiBold", fontSize: 10, color: COLORS.graphite, marginBottom: 6 },
   bar: { width: 14, backgroundColor: "rgba(34,197,94,0.35)", borderRadius: 4 },
   barCurrent: { backgroundColor: COLORS.accent },
   barLabel: { fontFamily: "Inter_400Regular", fontSize: 9, color: COLORS.graphite, marginTop: 6 },
-  categoryRow: { backgroundColor: COLORS.white, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: COLORS.line },
+  categoryRow: { backgroundColor: COLORS.surface, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: COLORS.line },
   categoryHeaderRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
   categoryName: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.ink },
   categorySets: { fontFamily: "Inter_500Medium", fontSize: 12, color: COLORS.graphite },
@@ -421,17 +423,18 @@ const styles = StyleSheet.create({
   categoryBarFill: { height: 6, borderRadius: 3, backgroundColor: COLORS.accent },
   categoryStepText: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.graphite, marginTop: 8 },
   emptyText: { fontFamily: "Inter_400Regular", color: COLORS.graphite, marginBottom: 12 },
-  prCard: { flexDirection: "row", backgroundColor: COLORS.white, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: COLORS.line },
+  prCard: { flexDirection: "row", backgroundColor: COLORS.surface, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: COLORS.line },
   prName: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.ink },
   prCategory: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.graphite, marginTop: 2 },
   prBadgeCol: { alignItems: "flex-end", gap: 4, justifyContent: "center" },
   prBadge: { fontFamily: "Inter_600SemiBold", fontSize: 11, color: COLORS.accent, backgroundColor: "rgba(34,197,94,0.1)", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: "hidden" },
   weightInputRow: { flexDirection: "row", gap: 8, marginBottom: 20 },
-  weightInput: { flex: 1, borderWidth: 1, borderColor: COLORS.line, borderRadius: 10, padding: 12, color: COLORS.ink, backgroundColor: COLORS.white, fontFamily: "Inter_400Regular" },
+  weightInput: { flex: 1, borderWidth: 1, borderColor: COLORS.line, borderRadius: 10, padding: 12, color: COLORS.ink, backgroundColor: COLORS.surface, fontFamily: "Inter_400Regular" },
   addWeightButton: { backgroundColor: COLORS.accent, paddingHorizontal: 20, justifyContent: "center", borderRadius: 10 },
-  addWeightButtonText: { color: COLORS.white, fontFamily: "Inter_700Bold" },
+  addWeightButtonText: { color: COLORS.onAccent, fontFamily: "Inter_700Bold" },
   weightSummaryRow: { flexDirection: "row", gap: 8, marginBottom: 20 },
-  weightSummaryBox: { flex: 1, backgroundColor: COLORS.white, borderRadius: 14, padding: 12, alignItems: "center", borderWidth: 1, borderColor: COLORS.line },
+  weightSummaryBox: { flex: 1, backgroundColor: COLORS.surface, borderRadius: 14, padding: 12, alignItems: "center", borderWidth: 1, borderColor: COLORS.line },
   weightSummaryNumber: { fontFamily: "BebasNeue_400Regular", fontSize: 20, color: COLORS.ink },
   weightSummaryLabel: { fontFamily: "Inter_400Regular", fontSize: 10, color: COLORS.graphite, marginTop: 2, textAlign: "center" },
-});
+  })
+);

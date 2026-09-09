@@ -9,13 +9,13 @@ import { performanceService, type MovementHistoryPoint } from "../../src/service
 import { workoutService } from "../../src/services/workout.service";
 import { useAuthStore } from "../../src/store/authStore";
 import { useWorkoutStore } from "../../src/store/workoutStore";
-import { COLORS } from "../../src/constants/theme";
+import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 import type { MovementWithPrerequisites, MovementSetLogMap } from "../../src/types/movements";
 import { areAllPrerequisitesMet, computeTargetProgress, formatTarget, getPrerequisiteTarget, isPrerequisiteMet } from "../../src/utils/targetProgress";
 
-const WARN = "#dc2626";
-
 export default function MovementDetailScreen() {
+  const COLORS = useColors();
+  const styles = getStyles(COLORS);
   const { id } = useLocalSearchParams<{ id: string }>();
   const userId = useAuthStore((s) => s.session?.user.id);
   const startSession = useWorkoutStore((s) => s.startSession);
@@ -139,7 +139,7 @@ export default function MovementDetailScreen() {
             <Text style={styles.guideTitle}>Sık Yapılan Hatalar</Text>
             {movement.mistakes.map((mistake, i) => (
               <View key={i} style={styles.bulletRow}>
-                <Feather name="x" size={14} color={WARN} style={styles.bulletIcon} />
+                <Feather name="x" size={14} color={COLORS.warn} style={styles.bulletIcon} />
                 <Text style={styles.bulletText}>{mistake}</Text>
               </View>
             ))}
@@ -178,10 +178,10 @@ export default function MovementDetailScreen() {
           onPress={handleQuickStart}
         >
           {starting ? (
-            <ActivityIndicator size="small" color={COLORS.white} />
+            <ActivityIndicator size="small" color={COLORS.onAccent} />
           ) : (
             <>
-              <Feather name={movementLocked ? "lock" : "play"} size={18} color={movementLocked ? COLORS.graphite : COLORS.white} />
+              <Feather name={movementLocked ? "lock" : "play"} size={18} color={movementLocked ? COLORS.graphite : COLORS.onAccent} />
               <Text style={[styles.quickStartText, movementLocked && styles.quickStartTextDisabled]}>
                 {movementLocked ? "Önce ön koşulları tamamla" : "Bu Hareketle Antrenman Başlat"}
               </Text>
@@ -257,7 +257,8 @@ export default function MovementDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = themedStyles((COLORS: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.paper },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.paper },
   notFoundText: { fontFamily: "Inter_400Regular", fontSize: 15, color: COLORS.graphite },
@@ -288,7 +289,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     justifyContent: "space-between",
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.line,
     borderRadius: 16,
@@ -316,7 +317,7 @@ const styles = StyleSheet.create({
   },
   difficultyBadge: {
     alignSelf: "flex-start",
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.line,
     paddingHorizontal: 12,
@@ -360,7 +361,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   quickStartButtonDisabled: { backgroundColor: COLORS.line },
-  quickStartText: { fontFamily: "Inter_700Bold", fontSize: 15, color: COLORS.white },
+  quickStartText: { fontFamily: "Inter_700Bold", fontSize: 15, color: COLORS.onAccent },
   quickStartTextDisabled: { color: COLORS.graphite },
   prereqSection: { marginTop: 28 },
   prereqHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -380,11 +381,11 @@ const styles = StyleSheet.create({
   prereqRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 10,
     marginBottom: 8,
     overflow: "hidden",
-    shadowColor: COLORS.ink,
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 4,
@@ -394,4 +395,5 @@ const styles = StyleSheet.create({
   prereqLeft: { flex: 1, paddingVertical: 14, paddingLeft: 14 },
   prereqName: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: COLORS.ink },
   prereqTarget: { fontFamily: "Inter_400Regular", fontSize: 13, color: COLORS.graphite, marginTop: 2 },
-});
+  })
+);

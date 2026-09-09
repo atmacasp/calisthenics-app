@@ -7,9 +7,7 @@ import { profileService } from "../../src/services/profile.service";
 import { progressService } from "../../src/services/progress.service";
 import { useProgramDay } from "../../src/hooks/useProgramDay";
 import { ActiveSessionBanner } from "../../src/components/ActiveSessionBanner";
-import { COLORS } from "../../src/constants/theme";
-
-const WARN = "#dc2626";
+import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const CARD_GAP = 12;
@@ -30,6 +28,8 @@ function daysSince(dateStr: string | null) {
 }
 
 export default function HomeScreen() {
+  const COLORS = useColors();
+  const styles = getStyles(COLORS);
   const session = useAuthStore((s) => s.session);
   const [profile, setProfile] = useState<any>(null);
   const [stats, setStats] = useState({ totalWorkouts: 0, totalSets: 0, mostTrainedCategory: "-" });
@@ -134,7 +134,7 @@ export default function HomeScreen() {
             <Text style={styles.weekCardNumber}>{weekly.thisWeekWorkouts}</Text>
             <Text style={styles.weekCardUnit}>antrenman</Text>
           </View>
-          <Text style={[styles.weekCardDelta, weeklyDelta < 0 && { color: WARN }]}>{weeklyDeltaText}</Text>
+          <Text style={[styles.weekCardDelta, weeklyDelta < 0 && { color: COLORS.warn }]}>{weeklyDeltaText}</Text>
           <View style={styles.weekCardFooter}>
             <MaterialCommunityIcons name="dumbbell" size={14} color={COLORS.graphite} />
             <Text style={styles.weekCardFooterText}>{weekly.thisWeekSets} set kaydedildi</Text>
@@ -149,7 +149,7 @@ export default function HomeScreen() {
             render: () => (
               <View style={styles.highlightCard}>
                 <View style={styles.highlightIconCircle}>
-                  <Ionicons name="trophy" size={20} color={COLORS.white} />
+                  <Ionicons name="trophy" size={20} color={COLORS.onAccent} />
                 </View>
                 <Text style={styles.highlightLabel}>Zirve Anı</Text>
                 <Text style={styles.highlightName} numberOfLines={1}>{highlight.name}</Text>
@@ -265,12 +265,12 @@ export default function HomeScreen() {
       >
         <View style={styles.ctaIconCircle}>
           {starting ? (
-            <ActivityIndicator size="small" color={COLORS.white} />
+            <ActivityIndicator size="small" color={COLORS.onAccent} />
           ) : (
             programDoneToday ? (
-              <Ionicons name="checkmark" size={20} color={COLORS.white} />
+              <Ionicons name="checkmark" size={20} color={COLORS.onAccent} />
             ) : (
-              <MaterialCommunityIcons name="dumbbell" size={18} color={COLORS.white} />
+              <MaterialCommunityIcons name="dumbbell" size={18} color={COLORS.onAccent} />
             )
           )}
         </View>
@@ -288,7 +288,7 @@ export default function HomeScreen() {
             </Text>
           )}
         </View>
-        <Ionicons name="chevron-forward" size={20} color={COLORS.white} />
+        <Ionicons name="chevron-forward" size={20} color={COLORS.onAccent} />
       </TouchableOpacity>
 
       {isProgramDay && (
@@ -365,23 +365,24 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = themedStyles((COLORS: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.paper },
   errorBanner: { backgroundColor: "#fee2e2", margin: 20, marginBottom: 0, padding: 12, borderRadius: 10 },
-  errorBannerText: { color: WARN, fontFamily: "Inter_500Medium", fontSize: 12, textAlign: "center" },
+  errorBannerText: { color: COLORS.warn, fontFamily: "Inter_500Medium", fontSize: 12, textAlign: "center" },
   headerRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingTop: 16, gap: 10 },
   avatarCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(34,197,94,0.12)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(34,197,94,0.25)" },
   avatarLetter: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.accent },
   greetingSmall: { fontFamily: "Inter_400Regular", fontSize: 13, color: COLORS.graphite },
   greetingName: { fontFamily: "Inter_700Bold", fontSize: 17, color: COLORS.ink, marginTop: 1 },
-  iconPill: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.line, alignItems: "center", justifyContent: "center" },
+  iconPill: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.line, alignItems: "center", justifyContent: "center" },
   notifDot: { position: "absolute", top: 9, right: 10, width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.accent },
-  streakPill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.line, borderRadius: 20, paddingHorizontal: 12, height: 40 },
+  streakPill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.line, borderRadius: 20, paddingHorizontal: 12, height: 40 },
   streakPillText: { fontFamily: "Inter_700Bold", fontSize: 13, color: COLORS.ink },
-  heroPanel: { flexDirection: "row", backgroundColor: COLORS.ink, borderRadius: 24, marginHorizontal: 20, marginTop: 18, padding: 20 },
+  heroPanel: { flexDirection: "row", backgroundColor: COLORS.inverse, borderRadius: 24, marginHorizontal: 20, marginTop: 18, padding: 20 },
   heroLabel: { fontFamily: "Inter_500Medium", fontSize: 12, color: "rgba(250,249,246,0.6)" },
   heroNumber: { fontFamily: "BebasNeue_400Regular", fontSize: 56, color: COLORS.accent, lineHeight: 54 },
-  heroUnit: { fontFamily: "Inter_500Medium", fontSize: 16, color: COLORS.paper, marginLeft: 8, marginBottom: 8 },
+  heroUnit: { fontFamily: "Inter_500Medium", fontSize: 16, color: COLORS.onInverse, marginLeft: 8, marginBottom: 8 },
   heroStatus: { fontFamily: "Inter_500Medium", fontSize: 13, color: "rgba(250,249,246,0.6)", marginTop: 8 },
   weekRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 18 },
   weekDayCol: { alignItems: "center", gap: 8 },
@@ -390,7 +391,7 @@ const styles = StyleSheet.create({
   weekDotFilled: { backgroundColor: COLORS.accent },
   weekDotToday: { borderWidth: 2, borderColor: "rgba(250,249,246,0.5)" },
   programCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(34,197,94,0.3)",
@@ -412,7 +413,7 @@ const styles = StyleSheet.create({
   chip: { backgroundColor: COLORS.paper, borderWidth: 1, borderColor: COLORS.line, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 5, maxWidth: "100%" },
   chipText: { fontFamily: "Inter_500Medium", fontSize: 12, color: COLORS.graphite },
   restBanner: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: COLORS.line,
@@ -434,9 +435,9 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   ctaIconCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" },
-  ctaText: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.white },
+  ctaText: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.onAccent },
   ctaSubtext: { fontFamily: "Inter_400Regular", fontSize: 12, color: "rgba(255,255,255,0.8)", marginTop: 2 },
-  ctaDone: { backgroundColor: COLORS.ink },
+  ctaDone: { backgroundColor: COLORS.inverse },
   programDoneChip: {
     fontFamily: "Inter_700Bold",
     fontSize: 10,
@@ -449,21 +450,21 @@ const styles = StyleSheet.create({
   },
   secondaryLink: { alignItems: "center", marginTop: 10 },
   secondaryLinkText: { fontFamily: "Inter_500Medium", fontSize: 13, color: COLORS.graphite, textDecorationLine: "underline" },
-  statsCard: { flexDirection: "row", backgroundColor: COLORS.white, borderRadius: 20, paddingVertical: 20, minHeight: 150, borderWidth: 1, borderColor: COLORS.line },
+  statsCard: { flexDirection: "row", backgroundColor: COLORS.surface, borderRadius: 20, paddingVertical: 20, minHeight: 150, borderWidth: 1, borderColor: COLORS.line },
   statCol: { flex: 1, alignItems: "center", gap: 6 },
   statDivider: { width: 1, backgroundColor: COLORS.line },
   statIconCircle: { width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(34,197,94,0.1)", alignItems: "center", justifyContent: "center" },
   statNumber: { fontFamily: "BebasNeue_400Regular", fontSize: 24, color: COLORS.ink },
   statNumberWord: { fontFamily: "Inter_700Bold", fontSize: 14, color: COLORS.ink },
   statLabel: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.graphite },
-  weekCard: { backgroundColor: COLORS.white, borderRadius: 20, padding: 20, minHeight: 150, borderWidth: 1, borderColor: COLORS.line, justifyContent: "center" },
+  weekCard: { backgroundColor: COLORS.surface, borderRadius: 20, padding: 20, minHeight: 150, borderWidth: 1, borderColor: COLORS.line, justifyContent: "center" },
   weekCardLabel: { fontFamily: "Inter_500Medium", fontSize: 12, color: COLORS.graphite },
   weekCardNumber: { fontFamily: "BebasNeue_400Regular", fontSize: 40, color: COLORS.ink, lineHeight: 38 },
   weekCardUnit: { fontFamily: "Inter_500Medium", fontSize: 14, color: COLORS.ink, marginLeft: 8, marginBottom: 4 },
   weekCardDelta: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: COLORS.accent, marginTop: 6 },
   weekCardFooter: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 14 },
   weekCardFooterText: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite },
-  highlightCard: { backgroundColor: COLORS.white, borderRadius: 20, padding: 20, minHeight: 150, borderWidth: 1, borderColor: "rgba(34,197,94,0.3)", justifyContent: "center" },
+  highlightCard: { backgroundColor: COLORS.surface, borderRadius: 20, padding: 20, minHeight: 150, borderWidth: 1, borderColor: "rgba(34,197,94,0.3)", justifyContent: "center" },
   highlightIconCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: COLORS.accent, alignItems: "center", justifyContent: "center", marginBottom: 10 },
   highlightLabel: { fontFamily: "Inter_500Medium", fontSize: 12, color: COLORS.graphite },
   highlightName: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.ink, marginTop: 4 },
@@ -473,9 +474,10 @@ const styles = StyleSheet.create({
   pageDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.line },
   pageDotActive: { backgroundColor: COLORS.accent, width: 16 },
   sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 17, color: COLORS.ink, marginHorizontal: 20, marginTop: 26, marginBottom: 12 },
-  quickCard: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.white, borderRadius: 16, marginHorizontal: 20, marginTop: 10, padding: 14, gap: 12, borderWidth: 1, borderColor: COLORS.line, overflow: "hidden" },
+  quickCard: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.surface, borderRadius: 16, marginHorizontal: 20, marginTop: 10, padding: 14, gap: 12, borderWidth: 1, borderColor: COLORS.line, overflow: "hidden" },
   quickAccentBar: { position: "absolute", left: 0, top: 0, bottom: 0, width: 3, backgroundColor: COLORS.accent },
   quickIconBox: { width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(34,197,94,0.1)", alignItems: "center", justifyContent: "center" },
   quickTitle: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: COLORS.ink },
   quickSubtitle: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, marginTop: 2 },
-});
+  })
+);

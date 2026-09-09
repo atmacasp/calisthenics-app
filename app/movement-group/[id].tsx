@@ -5,11 +5,13 @@ import { Feather } from "@expo/vector-icons";
 import { movementsService } from "../../src/services/movements.service";
 import { progressService } from "../../src/services/progress.service";
 import { useAuthStore } from "../../src/store/authStore";
-import { COLORS } from "../../src/constants/theme";
+import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 import type { MovementListItem, MovementSetLogMap } from "../../src/types/movements";
 import { areAllPrerequisitesMet, computeTargetProgress } from "../../src/utils/targetProgress";
 
 export default function MovementGroupScreen() {
+  const COLORS = useColors();
+  const styles = getStyles(COLORS);
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
   const userId = useAuthStore((s) => s.session?.user.id);
   const [movements, setMovements] = useState<MovementListItem[]>([]);
@@ -85,11 +87,11 @@ export default function MovementGroupScreen() {
                   ]}
                 >
                   {done ? (
-                    <Feather name="check" size={16} color={COLORS.white} />
+                    <Feather name="check" size={16} color={COLORS.onAccent} />
                   ) : unlocked ? (
                     <Text style={styles.stepNumber}>{index + 1}</Text>
                   ) : (
-                    <Feather name="lock" size={14} color={COLORS.white} />
+                    <Feather name="lock" size={14} color={COLORS.onAccent} />
                   )}
                 </View>
 
@@ -124,7 +126,8 @@ export default function MovementGroupScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = themedStyles((COLORS: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.paper },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.paper },
   headerContainer: {
@@ -153,11 +156,11 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     paddingVertical: 16,
     paddingHorizontal: 16,
-    shadowColor: COLORS.ink,
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 8,
@@ -173,8 +176,8 @@ const styles = StyleSheet.create({
     marginRight: 14,
   },
   stepCircleLocked: { backgroundColor: COLORS.graphite },
-  stepCircleDone: { backgroundColor: COLORS.ink },
-  stepNumber: { color: COLORS.white, fontFamily: "Inter_700Bold", fontSize: 14 },
+  stepCircleDone: { backgroundColor: COLORS.inverse },
+  stepNumber: { color: COLORS.onAccent, fontFamily: "Inter_700Bold", fontSize: 14 },
   rowContent: { flex: 1 },
   rowTitle: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: COLORS.ink },
   rowMeta: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, marginTop: 2 },
@@ -191,4 +194,5 @@ const styles = StyleSheet.create({
   barDetail: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.graphite, marginTop: 4 },
   connector: { width: 2, height: 14, backgroundColor: COLORS.line, marginLeft: 32 },
   connectorDone: { backgroundColor: COLORS.accent },
-});
+  })
+);

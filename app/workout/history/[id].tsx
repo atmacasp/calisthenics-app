@@ -6,7 +6,7 @@ import { Feather } from "@expo/vector-icons";
 import { workoutsService } from "../../../src/services/workouts.service";
 import { workoutService } from "../../../src/services/workout.service";
 import type { WorkoutSessionDetail } from "../../../src/types/workouts";
-import { COLORS } from "../../../src/constants/theme";
+import { COLORS, themedStyles, useColors, type ThemeColors } from "../../../src/constants/theme";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" });
@@ -26,6 +26,8 @@ function formatDuration(startedAt: string, endedAt: string | null) {
 }
 
 export default function WorkoutHistoryDetailScreen() {
+  const COLORS = useColors();
+  const styles = getStyles(COLORS);
   const { id } = useLocalSearchParams<{ id: string }>();
   const [session, setSession] = useState<WorkoutSessionDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -172,7 +174,7 @@ export default function WorkoutHistoryDetailScreen() {
       {notesChanged && (
         <TouchableOpacity style={styles.saveNotesButton} onPress={saveNotes} disabled={savingNotes}>
           {savingNotes ? (
-            <ActivityIndicator size="small" color={COLORS.white} />
+            <ActivityIndicator size="small" color={COLORS.onAccent} />
           ) : (
             <Text style={styles.saveNotesText}>Notu Kaydet</Text>
           )}
@@ -182,7 +184,8 @@ export default function WorkoutHistoryDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = themedStyles((COLORS: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.paper },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.paper },
   content: { padding: 22, paddingBottom: 60 },
@@ -191,11 +194,11 @@ const styles = StyleSheet.create({
   dateText: { fontFamily: "Inter_700Bold", fontSize: 20, color: COLORS.ink },
   durationText: { fontFamily: "Inter_400Regular", fontSize: 14, color: COLORS.graphite, marginTop: 2 },
   card: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 16,
     marginBottom: 12,
-    shadowColor: COLORS.ink,
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 8,
@@ -206,7 +209,7 @@ const styles = StyleSheet.create({
   setLine: { fontFamily: "Inter_400Regular", fontSize: 13, color: COLORS.graphite, marginTop: 2 },
   notesLabel: { fontFamily: "Inter_700Bold", fontSize: 13, color: COLORS.ink, marginTop: 12, marginBottom: 8 },
   notesInput: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.line,
     borderRadius: 12,
@@ -224,5 +227,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 10,
   },
-  saveNotesText: { color: COLORS.white, fontFamily: "Inter_700Bold", fontSize: 14 },
-});
+  saveNotesText: { color: COLORS.onAccent, fontFamily: "Inter_700Bold", fontSize: 14 },
+  })
+);

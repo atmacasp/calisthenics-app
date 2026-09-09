@@ -9,7 +9,7 @@ import { useAuthStore } from "../../src/store/authStore";
 import { useWorkoutStore } from "../../src/store/workoutStore";
 import type { MovementSetLogMap, MovementWithGroupAndPrerequisites } from "../../src/types/movements";
 import { areAllPrerequisitesMet } from "../../src/utils/targetProgress";
-import { COLORS } from "../../src/constants/theme";
+import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 
 interface Section {
   title: string;
@@ -26,6 +26,8 @@ function normalize(text: string) {
 const MIN_QUERY_LENGTH = 2;
 
 export default function PickMovementScreen() {
+  const COLORS = useColors();
+  const styles = getStyles(COLORS);
   const userId = useAuthStore((s) => s.session?.user.id);
   const [movements, setMovements] = useState<MovementWithGroupAndPrerequisites[]>([]);
   const [setLogMap, setSetLogMap] = useState<MovementSetLogMap>({});
@@ -174,7 +176,8 @@ export default function PickMovementScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = themedStyles((COLORS: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.paper },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.paper },
   headerContainer: {
@@ -192,7 +195,7 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.line,
@@ -226,12 +229,12 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     marginBottom: 10,
     paddingVertical: 14,
     paddingHorizontal: 14,
-    shadowColor: COLORS.ink,
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 8,
@@ -267,4 +270,5 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     marginTop: 40,
   },
-});
+  })
+);

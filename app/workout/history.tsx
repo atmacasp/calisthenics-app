@@ -5,7 +5,7 @@ import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/authStore";
 import { workoutsService } from "../../src/services/workouts.service";
 import type { WorkoutSessionSummary } from "../../src/types/workouts";
-import { COLORS } from "../../src/constants/theme";
+import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 
 const MAX_VISIBLE_MOVEMENTS = 2;
 
@@ -35,6 +35,8 @@ function formatMovements(names: string[]) {
 }
 
 export default function WorkoutHistoryScreen() {
+  const COLORS = useColors();
+  const styles = getStyles(COLORS);
   const userId = useAuthStore((s) => s.session?.user.id);
   const [sessions, setSessions] = useState<WorkoutSessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -124,19 +126,20 @@ export default function WorkoutHistoryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = themedStyles((COLORS: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.paper },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   listContent: { padding: 22, paddingBottom: 40 },
   card: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     marginBottom: 12,
     paddingVertical: 16,
     paddingHorizontal: 16,
-    shadowColor: COLORS.ink,
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 8,
@@ -177,4 +180,5 @@ const styles = StyleSheet.create({
   },
   emptyBox: { alignItems: "center", marginTop: 60, gap: 10 },
   emptyText: { fontFamily: "Inter_400Regular", color: COLORS.graphite, textAlign: "center" },
-});
+  })
+);

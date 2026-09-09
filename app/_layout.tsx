@@ -12,11 +12,13 @@ import {
 } from "@expo-google-fonts/inter";
 import { useAuthStore } from "../src/store/authStore";
 import { notificationsService } from "../src/services/notifications.service";
-import { COLORS } from "../src/constants/theme";
+import { useColors, useResolvedScheme } from "../src/constants/theme";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
+  const COLORS = useColors();
+  const scheme = useResolvedScheme();
   const initialize = useAuthStore((state) => state.initialize);
 
   const [fontsLoaded] = useFonts({
@@ -42,17 +44,21 @@ export default function RootLayout() {
 
   if (!fontsLoaded) return null;
 
-  // Tüm ekranlar tek açık palette (theme.ts) kullanıyor. Eskiden burada tema
-  // tercihine göre siyah/beyaz seçiliyordu; "Koyu" seçiliyken açık zemine
-  // beyaz status bar ikonları çizildiği için okunmuyordu. Gerçek koyu tema
-  // gelene kadar sabit.
+  // Status bar ikonları zemine göre ters olmalı: açık temada koyu, koyu temada
+  // açık. Eskiden sabitti ve koyu tema seçilince ikonlar okunmuyordu.
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" />
+      <StatusBar style={scheme === "dark" ? "light" : "dark"} />
       <Stack
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: COLORS.paper },
+          // Alt ekranlarin basliklari (Stack.Screen ile headerShown: true diyenler)
+          // varsayilan acik temada kaliyordu; renkler burada tek yerden veriliyor.
+          headerStyle: { backgroundColor: COLORS.surface },
+          headerTintColor: COLORS.ink,
+          headerTitleStyle: { color: COLORS.ink },
+          headerShadowVisible: false,
         }}
       />
     </SafeAreaProvider>

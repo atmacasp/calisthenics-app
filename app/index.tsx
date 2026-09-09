@@ -4,10 +4,11 @@ import { Redirect } from "expo-router";
 import { useAuthStore } from "../src/store/authStore";
 import { useThemeStore } from "../src/store/themeStore";
 import { profileService } from "../src/services/profile.service";
-import { COLORS } from "../src/constants/theme";
+import { useColors } from "../src/constants/theme";
 import { notificationsService } from "../src/services/notifications.service";
 
 export default function Index() {
+  const COLORS = useColors();
   const session = useAuthStore((state) => state.session);
   const isLoading = useAuthStore((state) => state.isLoading);
   const setThemePreference = useThemeStore((s) => s.setPreference);

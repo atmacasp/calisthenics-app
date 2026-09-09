@@ -5,7 +5,7 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/authStore";
 import { programsService } from "../../src/services/programs.service";
 import type { ProgramRow, UserProgramRow } from "../../src/types/programs";
-import { COLORS } from "../../src/constants/theme";
+import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 
 const LEVEL_LABELS: Record<string, string> = {
   beginner: "Başlangıç",
@@ -14,6 +14,8 @@ const LEVEL_LABELS: Record<string, string> = {
 };
 
 export default function ProgramsListScreen() {
+  const COLORS = useColors();
+  const styles = getStyles(COLORS);
   const userId = useAuthStore((s) => s.session?.user.id);
   const [programs, setPrograms] = useState<ProgramRow[]>([]);
   const [activeProgram, setActiveProgram] = useState<UserProgramRow | null>(null);
@@ -78,13 +80,13 @@ export default function ProgramsListScreen() {
               activeOpacity={0.85}
             >
               <View style={styles.createIconCircle}>
-                <Ionicons name="add" size={20} color={COLORS.white} />
+                <Ionicons name="add" size={20} color={COLORS.onAccent} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.createTitle}>Kendi Programını Oluştur</Text>
                 <Text style={styles.createSubtitle}>Günleri ve hedefleri sen belirle</Text>
               </View>
-              <Feather name="chevron-right" size={18} color={COLORS.white} />
+              <Feather name="chevron-right" size={18} color={COLORS.onAccent} />
             </TouchableOpacity>
           </>
         }
@@ -125,7 +127,8 @@ export default function ProgramsListScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = themedStyles((COLORS: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.paper },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.paper },
   listContent: { padding: 22, paddingBottom: 40 },
@@ -134,7 +137,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: COLORS.ink,
+    backgroundColor: COLORS.inverse,
     borderRadius: 16,
     padding: 14,
     marginBottom: 8,
@@ -147,7 +150,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  createTitle: { fontFamily: "Inter_700Bold", fontSize: 15, color: COLORS.paper },
+  createTitle: { fontFamily: "Inter_700Bold", fontSize: 15, color: COLORS.onInverse },
   createSubtitle: { fontFamily: "Inter_400Regular", fontSize: 12, color: "rgba(250,249,246,0.6)", marginTop: 2 },
   sectionHeader: {
     fontFamily: "Inter_700Bold",
@@ -162,12 +165,12 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     marginBottom: 12,
     paddingVertical: 16,
     paddingHorizontal: 16,
-    shadowColor: COLORS.ink,
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 8,
@@ -182,4 +185,5 @@ const styles = StyleSheet.create({
   mineBadge: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: COLORS.ink },
   activeBadge: { flexDirection: "row", alignItems: "center", gap: 3 },
   activeBadgeText: { fontFamily: "Inter_700Bold", fontSize: 12, color: COLORS.accent },
-});
+  })
+);

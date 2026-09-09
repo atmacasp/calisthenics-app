@@ -9,13 +9,15 @@ import { useAuthStore } from "../../src/store/authStore";
 import { useWorkoutStore } from "../../src/store/workoutStore";
 import { useProgramDay } from "../../src/hooks/useProgramDay";
 import { ActiveSessionBanner } from "../../src/components/ActiveSessionBanner";
-import { COLORS } from "../../src/constants/theme";
+import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 import type { MovementSetLogMap, MovementWithGroupAndPrerequisites } from "../../src/types/movements";
 import { formatTarget, type TargetProgress } from "../../src/utils/targetProgress";
 import { computeFocusSuggestions, summarizeSteps, type FocusSuggestion } from "../../src/utils/workoutSuggestions";
 
 /** Hedefe kalan mesafeyi kart içinde gösteren ince çubuk. */
 function TargetProgressBar({ progress }: { progress: TargetProgress }) {
+  const COLORS = useColors();
+  const styles = getStyles(COLORS);
   return (
     <View style={styles.progressWrap}>
       <View style={styles.progressTrack}>
@@ -28,6 +30,8 @@ function TargetProgressBar({ progress }: { progress: TargetProgress }) {
 }
 
 export default function WorkoutScreen() {
+  const COLORS = useColors();
+  const styles = getStyles(COLORS);
   const userId = useAuthStore((s) => s.session?.user.id);
   const startSession = useWorkoutStore((s) => s.startSession);
   const addMovement = useWorkoutStore((s) => s.addMovement);
@@ -159,7 +163,7 @@ export default function WorkoutScreen() {
                 onPress={completedToday ? () => router.push(`/workout/history/${completedToday.id}`) : startToday}
               >
                 {starting ? (
-                  <ActivityIndicator size="small" color={COLORS.white} />
+                  <ActivityIndicator size="small" color={COLORS.onAccent} />
                 ) : (
                   <Text style={[styles.todayStartButtonText, completedToday ? styles.todayDoneButtonText : null]}>
                     {completedToday ? "Bugünü tamamladın · Antrenmanı gör" : "Bugünün Antrenmanına Başla"}
@@ -250,7 +254,8 @@ export default function WorkoutScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = themedStyles((COLORS: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.paper },
   content: { padding: 22, paddingTop: 48, paddingBottom: 60 },
   title: {
@@ -274,7 +279,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   primaryButtonText: {
-    color: COLORS.white,
+    color: COLORS.onAccent,
     fontFamily: "Inter_700Bold",
     fontSize: 16,
   },
@@ -360,13 +365,13 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   todayCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 18,
     marginBottom: 28,
     borderWidth: 1,
     borderColor: "rgba(34, 197, 94, 0.25)",
-    shadowColor: COLORS.ink,
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 8,
@@ -403,18 +408,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 10,
   },
-  todayStartButtonText: { fontFamily: "Inter_700Bold", fontSize: 14, color: COLORS.white },
+  todayStartButtonText: { fontFamily: "Inter_700Bold", fontSize: 14, color: COLORS.onAccent },
   todayDoneButton: { backgroundColor: COLORS.paper, borderWidth: 1, borderColor: COLORS.line },
   todayDoneButtonText: { color: COLORS.graphite },
   card: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     marginBottom: 12,
     paddingVertical: 16,
     paddingHorizontal: 16,
-    shadowColor: COLORS.ink,
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 8,
@@ -460,4 +465,5 @@ const styles = StyleSheet.create({
     color: COLORS.accent,
     marginTop: 2,
   },
-});
+  })
+);

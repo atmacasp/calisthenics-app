@@ -14,9 +14,8 @@ import {
 } from "../../src/utils/programUpgrades";
 import type { MovementSetLogMap, MovementWithGroupAndPrerequisites } from "../../src/types/movements";
 import type { ProgramMovementWithName, ProgramWithDays, UserProgramRow } from "../../src/types/programs";
-import { COLORS } from "../../src/constants/theme";
+import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 
-const DANGER = "#dc2626";
 const DAY_NAMES = ["", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
 const LEVEL_LABELS: Record<string, string> = {
   beginner: "Başlangıç",
@@ -34,6 +33,8 @@ function formatProgramTarget(pm: ProgramMovementWithName): string {
 }
 
 export default function ProgramDetailScreen() {
+  const COLORS = useColors();
+  const styles = getStyles(COLORS);
   const { id } = useLocalSearchParams<{ id: string }>();
   const userId = useAuthStore((s) => s.session?.user.id);
   const [program, setProgram] = useState<ProgramWithDays | null>(null);
@@ -255,7 +256,7 @@ export default function ProgramDetailScreen() {
         onPress={isActive ? handleUnfollow : handleFollow}
       >
         {updating ? (
-          <ActivityIndicator size="small" color={isActive ? COLORS.graphite : COLORS.white} />
+          <ActivityIndicator size="small" color={isActive ? COLORS.graphite : COLORS.onAccent} />
         ) : (
           <Text style={[styles.followButtonText, isActive && styles.followButtonTextActive]}>
             {isActive ? "Takip Ediliyor · Bırak" : "Bu Programı Takip Et"}
@@ -274,8 +275,8 @@ export default function ProgramDetailScreen() {
             <Text style={styles.ownerButtonText}>Düzenle</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.ownerButton} onPress={handleDelete} activeOpacity={0.8}>
-            <Ionicons name="trash-outline" size={16} color={DANGER} />
-            <Text style={[styles.ownerButtonText, { color: DANGER }]}>Sil</Text>
+            <Ionicons name="trash-outline" size={16} color={COLORS.warn} />
+            <Text style={[styles.ownerButtonText, { color: COLORS.warn }]}>Sil</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -398,7 +399,8 @@ export default function ProgramDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = themedStyles((COLORS: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.paper },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.paper },
   content: { padding: 22, paddingBottom: 50 },
@@ -424,8 +426,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 18,
   },
-  followButtonActive: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.line },
-  followButtonText: { fontFamily: "Inter_700Bold", fontSize: 15, color: COLORS.white },
+  followButtonActive: { backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.line },
+  followButtonText: { fontFamily: "Inter_700Bold", fontSize: 15, color: COLORS.onAccent },
   followButtonTextActive: { color: COLORS.graphite },
   ownerRow: { flexDirection: "row", gap: 10, marginTop: 10 },
   ownerButton: {
@@ -436,13 +438,13 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.line,
   },
   ownerButtonText: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.ink },
   upgradeCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 16,
     marginTop: 18,
@@ -490,13 +492,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
-  upgradeButtonText: { fontFamily: "Inter_700Bold", fontSize: 13, color: COLORS.white },
+  upgradeButtonText: { fontFamily: "Inter_700Bold", fontSize: 13, color: COLORS.onAccent },
   dayCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 16,
     marginTop: 12,
-    shadowColor: COLORS.ink,
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 8,
@@ -540,4 +542,5 @@ const styles = StyleSheet.create({
   movementRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
   movementName: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.ink, flex: 1, marginRight: 8 },
   movementTarget: { fontFamily: "Inter_400Regular", fontSize: 13, color: COLORS.graphite },
-});
+  })
+);

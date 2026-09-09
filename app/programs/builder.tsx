@@ -20,9 +20,8 @@ import { programsService } from "../../src/services/programs.service";
 import { movementsService } from "../../src/services/movements.service";
 import type { MovementWithGroupAndPrerequisites } from "../../src/types/movements";
 import type { ProgramDraft, ProgramDraftMovement, ProgramLevel } from "../../src/types/programs";
-import { COLORS } from "../../src/constants/theme";
+import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 
-const DANGER = "#dc2626";
 const MIN_QUERY_LENGTH = 2;
 
 const DAYS = [
@@ -70,6 +69,8 @@ function todayDayOfWeek() {
 }
 
 export default function ProgramBuilderScreen() {
+  const COLORS = useColors();
+  const styles = getStyles(COLORS);
   const params = useLocalSearchParams<{ id?: string }>();
   const programId = params.id ?? null;
   const isEditing = !!programId;
@@ -354,7 +355,7 @@ export default function ProgramBuilderScreen() {
                     />
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.iconButton} onPress={() => removeItem(item.key)}>
-                    <Ionicons name="trash-outline" size={16} color={DANGER} />
+                    <Ionicons name="trash-outline" size={16} color={COLORS.warn} />
                   </TouchableOpacity>
                 </View>
 
@@ -405,7 +406,7 @@ export default function ProgramBuilderScreen() {
 
         <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={saving} activeOpacity={0.85}>
           {saving ? (
-            <ActivityIndicator size="small" color={COLORS.white} />
+            <ActivityIndicator size="small" color={COLORS.onAccent} />
           ) : (
             <Text style={styles.saveButtonText}>{isEditing ? "Değişiklikleri Kaydet" : "Programı Oluştur"}</Text>
           )}
@@ -467,13 +468,14 @@ export default function ProgramBuilderScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = themedStyles((COLORS: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.paper },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.paper },
   content: { padding: 20, paddingBottom: 48 },
   label: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: COLORS.ink, marginBottom: 8, marginTop: 16 },
   input: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.line,
     borderRadius: 12,
@@ -489,13 +491,13 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     borderRadius: 12,
     alignItems: "center",
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.line,
   },
   levelButtonActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
   levelText: { fontFamily: "Inter_500Medium", fontSize: 13, color: COLORS.ink },
-  levelTextActive: { color: COLORS.white, fontFamily: "Inter_700Bold" },
+  levelTextActive: { color: COLORS.onAccent, fontFamily: "Inter_700Bold" },
   summaryRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -513,14 +515,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     height: 38,
     borderRadius: 19,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.line,
     marginRight: 8,
   },
-  dayPillActive: { backgroundColor: COLORS.ink, borderColor: COLORS.ink },
+  dayPillActive: { backgroundColor: COLORS.inverse, borderColor: COLORS.inverse },
   dayPillText: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: COLORS.ink },
-  dayPillTextActive: { color: COLORS.paper },
+  dayPillTextActive: { color: COLORS.onInverse },
   dayCountDot: {
     minWidth: 18,
     height: 18,
@@ -533,10 +535,10 @@ const styles = StyleSheet.create({
   dayCountDotFilled: { backgroundColor: COLORS.accent },
   dayCountDotOnActive: { opacity: 0.95 },
   dayCountText: { fontFamily: "Inter_700Bold", fontSize: 10, color: COLORS.graphite },
-  dayCountTextFilled: { color: COLORS.white },
+  dayCountTextFilled: { color: COLORS.onAccent },
   dayHeading: { fontFamily: "Inter_700Bold", fontSize: 17, color: COLORS.ink, marginBottom: 12 },
   restBox: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.line,
@@ -548,7 +550,7 @@ const styles = StyleSheet.create({
   restText: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.ink },
   restHint: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite },
   movementCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.line,
@@ -593,7 +595,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accent,
     alignItems: "center",
   },
-  saveButtonText: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.white },
+  saveButtonText: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.onAccent },
   modalContainer: { flex: 1, backgroundColor: COLORS.paper },
   modalHeader: {
     flexDirection: "row",
@@ -614,7 +616,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     height: 44,
     borderRadius: 12,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.line,
   },
@@ -623,7 +625,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.line,
@@ -635,4 +637,5 @@ const styles = StyleSheet.create({
   pickerName: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.ink },
   pickerGroup: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.graphite, marginTop: 2 },
   emptyText: { fontFamily: "Inter_400Regular", fontSize: 13, color: COLORS.graphite, textAlign: "center", marginTop: 30 },
-});
+  })
+);
