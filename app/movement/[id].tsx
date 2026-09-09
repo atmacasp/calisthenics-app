@@ -5,6 +5,7 @@ import { useLocalSearchParams, Stack, router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { movementsService } from "../../src/services/movements.service";
 import { progressService } from "../../src/services/progress.service";
+import { performanceService, type MovementHistoryPoint } from "../../src/services/performance.service";
 import { workoutService } from "../../src/services/workout.service";
 import { useAuthStore } from "../../src/store/authStore";
 import { useWorkoutStore } from "../../src/store/workoutStore";
@@ -21,6 +22,7 @@ export default function MovementDetailScreen() {
   const [setLogMap, setSetLogMap] = useState<MovementSetLogMap>({});
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
+  const [history, setHistory] = useState<MovementHistoryPoint[]>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -28,10 +30,12 @@ export default function MovementDetailScreen() {
     Promise.all([
       movementsService.getMovementById(id),
       userId ? progressService.getMovementSetLogs(userId) : Promise.resolve({} as MovementSetLogMap),
+      userId ? performanceService.getMovementHistory(userId, id) : Promise.resolve([] as MovementHistoryPoint[]),
     ])
-      .then(([m, logs]) => {
+      .then(([m, logs, hist]) => {
         setMovement(m);
         setSetLogMap(logs);
+        setHistory(hist);
       })
       .finally(() => setLoading(false));
   }, [id, userId]);
@@ -56,6 +60,9 @@ export default function MovementDetailScreen() {
 
   const targetText = formatTarget(movement);
   const targetProgress = computeTargetProgress(movement, setLogMap[movement.id]);
+  // Grafik hangi metriği çizecek: hedef süreyse saniye, değilse tekrar.
+  const isDurationTarget = movement.target_type === "duration";
+  const historyMax = Math.max(1, ...history.map((p) => (isDurationTarget ? p.bestDuration : p.bestReps)));
   const prerequisites = movement.prerequisites ?? [];
   const metCount = prerequisites.filter((p) => isPrerequisiteMet(p, setLogMap)).length;
   const allMet = prerequisites.length === 0 || metCount === prerequisites.length;
@@ -184,6 +191,29 @@ export default function MovementDetailScreen() {
           </View>
         )}
       </View>
+      {history.length > 1 && (
+        <View style={styles.historySection}>
+          <Text style={styles.historyTitle}>Gelişim</Text>
+          <Text style={styles.historySubtitle}>
+            Son {history.length} antrenmandaki en iyi setin
+          </Text>
+          <View style={styles.historyChart}>
+            {history.map((p, i) => {
+              const value = isDurationTarget ? p.bestDuration : p.bestReps;
+              const barHeight = Math.max(6, Math.round((value / historyMax) * 92));
+              const isBest = value === historyMax && value > 0;
+              return (
+                <View key={`${p.date}-${i}`} style={styles.historyCol}>
+                  <Text style={styles.historyValue}>{value}</Text>
+                  <View style={[styles.historyBar, { height: barHeight }, isBest && styles.historyBarBest]} />
+                  <Text style={styles.historyLabel}>{p.date.slice(5)}</Text>
+                </View>
+              );
+            })}
+          </View>
+          <Text style={styles.historyUnit}>{isDurationTarget ? "saniye" : "tekrar"}</Text>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -201,6 +231,27 @@ const styles = StyleSheet.create({
   image: { width: "100%", height: "100%" },
   placeholderText: { fontFamily: "Inter_400Regular", color: COLORS.graphite },
   content: { padding: 22 },
+  historySection: { paddingHorizontal: 22, paddingBottom: 36 },
+  historyTitle: { fontFamily: "Inter_700Bold", fontSize: 17, color: COLORS.ink },
+  historySubtitle: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, marginTop: 2, marginBottom: 14 },
+  historyChart: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    borderRadius: 16,
+    padding: 14,
+    paddingTop: 20,
+    height: 170,
+  },
+  historyCol: { flex: 1, alignItems: "center", justifyContent: "flex-end", height: "100%" },
+  historyValue: { fontFamily: "Inter_600SemiBold", fontSize: 10, color: COLORS.graphite, marginBottom: 6 },
+  historyBar: { width: 14, borderRadius: 4, backgroundColor: "rgba(34,197,94,0.35)" },
+  historyBarBest: { backgroundColor: COLORS.accent },
+  historyLabel: { fontFamily: "Inter_400Regular", fontSize: 9, color: COLORS.graphite, marginTop: 6 },
+  historyUnit: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.graphite, marginTop: 8, textAlign: "right" },
   category: {
     fontFamily: "Inter_600SemiBold",
     fontSize: 14,

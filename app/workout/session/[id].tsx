@@ -1,7 +1,8 @@
 
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, Vibration } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, Vibration, Animated, Easing } from "react-native";
 import { useEffect, useState, useRef } from "react";
 import { router, useLocalSearchParams, Stack } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../../src/store/authStore";
 import { useWorkoutStore } from "../../../src/store/workoutStore";
@@ -92,6 +93,7 @@ function setMeetsOwnTarget(
 
 export default function WorkoutSessionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const insets = useSafeAreaInsets();
   const authSession = useAuthStore((s) => s.session);
   const sessionMovements = useWorkoutStore((s) => s.sessionMovements);
   const sessionProgramLabel = useWorkoutStore((s) => s.sessionProgramLabel);
@@ -102,6 +104,14 @@ export default function WorkoutSessionScreen() {
 
   const [inputs, setInputs] = useState<Record<string, { reps: string; duration: string; weight: string }>>({});
   const [restLeft, setRestLeft] = useState(0);
+  // Kalan süre çubuğunun paydası: dinlenme kaç saniyeyle başladı.
+  const [restTotal, setRestTotal] = useState(REST_SECONDS);
+  const restAnim = useRef(new Animated.Value(0)).current;
+  // scaleY merkezden büyür; üst kenarı sabit tutmak için bandın yüksekliği ölçülüyor.
+  const [restHeight, setRestHeight] = useState(64);
+  // Bant, restLeft sıfırlanınca hemen kaldırılmıyor; kapanış animasyonu bitince kalkıyor.
+  const [restVisible, setRestVisible] = useState(false);
+  const [headerHeight, setHeaderHeight] = useState(96);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const [notes, setNotes] = useState("");
   // Bu antrenman BAŞLAMADAN ÖNCEKİ kişisel rekorlar - antrenman süresince
@@ -137,6 +147,46 @@ export default function WorkoutSessionScreen() {
     }
   }, [restLeft]);
 
+  // Bildirim ekranın üstünden küçük başlar, aşağı inerken büyür, yere değince
+  // balon gibi ezilip toparlanır. Tek sürücü (restAnim) var; "damla" hissi ayrı
+  // yaylardan değil, aşağıdaki ölçek eğrisinin tepe/çukur noktalarından geliyor -
+  // yayla yapılamazdı, çünkü yay ölçeği 1'in altına indirip geri getiremez.
+  useEffect(() => {
+    if (restLeft > 0) {
+      setRestVisible(true);
+      restAnim.setValue(0);
+      Animated.sequence([
+        // 1) HIZLI FAZ: tepeden dar bir damla olarak düşerken kendi pencere
+        //    boyutuna kadar büyür. Kasten çok kısa; hızlanan easing ile bitiyor.
+        Animated.timing(restAnim, {
+          toValue: 0.3,
+          duration: 160,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
+        // 2) AĞIR ÇEKİM: boyut tamamlandığı anda hız düşer. Kalan iniş, çarpma
+        //    ve sekme bu fazda. Doğrusal - hızın sabit kalması, birinci fazla
+        //    arasındaki kırılmayı belirginleştiriyor.
+        Animated.timing(restAnim, {
+          toValue: 1,
+          duration: 760,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      return;
+    }
+
+    Animated.timing(restAnim, {
+      toValue: 0,
+      duration: 200,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) setRestVisible(false);
+    });
+  }, [restLeft > 0]);
+
   const skipRest = () => {
     restWasRunning.current = false;
     setRestLeft(0);
@@ -170,6 +220,9 @@ export default function WorkoutSessionScreen() {
     const value = field === "weight" ? sanitizeDecimal(rawValue) : sanitizeInteger(rawValue);
     setInputs((prev) => ({ ...prev, [movementId]: { ...prev[movementId], [field]: value } }));
   };
+
+  // Bant kendi yüksekliği + başlık + çentik kadar yukarıdan, yani ekran dışından düşer.
+  const restDropFrom = -(headerHeight + restHeight + 24);
 
   const totalLoggedSets = sessionMovements.reduce((sum, m) => sum + m.sets.length, 0);
 
@@ -228,7 +281,9 @@ export default function WorkoutSessionScreen() {
       });
       addSetToMovement(movementId, saved);
       setInputs((prev) => ({ ...prev, [movementId]: { reps: "", duration: "", weight: "" } }));
-      setRestLeft(movement.restSeconds ?? REST_SECONDS);
+      const restFor = movement.restSeconds ?? REST_SECONDS;
+      setRestTotal(restFor);
+      setRestLeft(restFor);
     } catch (error: any) {
       Alert.alert("Hata", error.message ?? "Set kaydedilemedi");
     }
@@ -256,20 +311,68 @@ export default function WorkoutSessionScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ headerShown: true, title: "Aktif Antrenman" }} />
+      <Stack.Screen options={{ headerShown: false }} />
 
-      {restLeft > 0 && (
-        <View style={styles.restBanner}>
+      <View
+        style={[styles.header, { paddingTop: insets.top + 8 }]}
+        onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
+      >
+        <TouchableOpacity onPress={() => router.back()} hitSlop={10} style={styles.headerBack}>
+          <Feather name="arrow-left" size={22} color={COLORS.ink} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Aktif Antrenman</Text>
+      </View>
+
+      {restVisible && (
+        <Animated.View
+          onLayout={(e) => setRestHeight(e.nativeEvent.layout.height)}
+          style={[
+            styles.restBanner,
+            { position: "absolute", top: headerHeight + 8, left: 16, right: 16, zIndex: 20 },
+            {
+              opacity: restAnim.interpolate({ inputRange: [0, 0.1, 1], outputRange: [0, 1, 1] }),
+              transform: [
+                {
+                  translateY: restAnim.interpolate({
+                    inputRange: [0, 0.15, 0.3, 0.52, 0.62, 0.78, 0.9, 1],
+                    outputRange: [restDropFrom, restDropFrom * 0.55, restDropFrom * 0.18, 12, 6, -10, 3, 0],
+                  }),
+                },
+                {
+                  scaleY: restAnim.interpolate({
+                    inputRange: [0, 0.15, 0.3, 0.52, 0.62, 0.78, 0.9, 1],
+                    outputRange: [0.5, 0.72, 1, 1.02, 0.82, 1.08, 0.97, 1],
+                  }),
+                },
+                {
+                  scaleX: restAnim.interpolate({
+                    inputRange: [0, 0.15, 0.3, 0.52, 0.62, 0.78, 0.9, 1],
+                    outputRange: [0.12, 0.55, 1, 1, 1.14, 0.95, 1.02, 1],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.restTrack}>
+            <View style={[styles.restFill, { width: `${Math.max(0, Math.min(100, (restLeft / Math.max(1, restTotal)) * 100))}%` }]} />
+          </View>
           <Text style={styles.restText}>Dinlenme: {restLeft}s</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 18 }}>
-            <TouchableOpacity onPress={() => setRestLeft((s) => s + 30)} hitSlop={8}>
+            <TouchableOpacity
+              onPress={() => {
+                setRestTotal((t) => t + 30);
+                setRestLeft((s) => s + 30);
+              }}
+              hitSlop={8}
+            >
               <Text style={styles.skipText}>+30 sn</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={skipRest} hitSlop={8}>
             <Text style={styles.skipText}>Atla</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
       )}
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -430,15 +533,27 @@ export default function WorkoutSessionScreen() {
         )}
       </ScrollView>
 
-      <TouchableOpacity style={styles.finishButton} onPress={finishWorkout}>
+      <View style={styles.footer}>
+        <TouchableOpacity style={styles.finishButton} onPress={finishWorkout} activeOpacity={0.85}>
         <Text style={styles.finishButtonText}>Antrenmanı Bitir</Text>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.paper },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    backgroundColor: COLORS.paper,
+  },
+  headerBack: { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
+  headerTitle: { fontFamily: "Inter_700Bold", fontSize: 20, color: COLORS.ink },
   scrollContent: { padding: 16, paddingBottom: 32 },
   programBadge: {
     flexDirection: "row",
@@ -453,6 +568,15 @@ const styles = StyleSheet.create({
   },
   programBadgeText: { fontFamily: "Inter_700Bold", fontSize: 13, color: COLORS.accent },
   restBanner: {
+
+
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: COLORS.ink,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 6,
     backgroundColor: COLORS.ink,
     padding: 12,
     flexDirection: "row",
@@ -461,6 +585,8 @@ const styles = StyleSheet.create({
   },
   restText: { color: COLORS.white, fontFamily: "Inter_700Bold", fontSize: 14 },
   skipText: { color: COLORS.accent, fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  restTrack: { position: "absolute", left: 0, right: 0, bottom: 0, height: 3, backgroundColor: "rgba(250,249,246,0.15)" },
+  restFill: { height: 3, backgroundColor: COLORS.accent },
   emptyBox: { alignItems: "center", marginTop: 40, gap: 10 },
   emptyText: {
     textAlign: "center",
@@ -491,7 +617,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 10,
-    marginTop: 12,
+
     marginBottom: 8,
   },
   targetChipText: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: COLORS.accent },
@@ -536,6 +662,14 @@ const styles = StyleSheet.create({
     color: COLORS.ink,
     textAlignVertical: "top",
   },
-  finishButton: { backgroundColor: COLORS.ink, padding: 18 },
+  footer: {
+    backgroundColor: COLORS.paper,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.line,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 20,
+  },
+  finishButton: { backgroundColor: COLORS.ink, borderRadius: 16, paddingVertical: 16 },
   finishButtonText: { color: COLORS.white, textAlign: "center", fontFamily: "Inter_700Bold", fontSize: 16 },
 });

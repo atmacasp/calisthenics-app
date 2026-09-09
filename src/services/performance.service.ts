@@ -1,10 +1,19 @@
 import { supabase } from "../lib/supabase";
+import { toLocalDateKey } from "../utils/date";
 
 export interface PreviousPerformance {
   /** Ekranda gösterilmeye hazır metin: "12 · 12 · 10 tekrar" ya da "30 · 25 sn" */
   summary: string;
   /** O setlerin yapıldığı gün (YYYY-MM-DD) */
   date: string;
+}
+
+/** Bir antrenmandaki en iyi performans - gelişim grafiğinin tek noktası. */
+export interface MovementHistoryPoint {
+  date: string;
+  bestReps: number;
+  bestDuration: number;
+  setCount: number;
 }
 
 const NO_MATCH_UUID = "00000000-0000-0000-0000-000000000000";
@@ -72,5 +81,55 @@ export const performanceService = {
     });
 
     return result;
+  },
+
+  /**
+   * Bir hareketin antrenman bazında gelişimi: her BİTMİŞ antrenman için o
+   * antrenmandaki en iyi set. Grafiğin ham verisi.
+   *
+   * Tarihler yerel güne göre üretiliyor (bkz. utils/date) - aksi halde gece
+   * yapılan antrenmanlar bir önceki güne etiketlenirdi.
+   */
+  async getMovementHistory(
+    userId: string,
+    movementId: string,
+    limit = 10
+  ): Promise<MovementHistoryPoint[]> {
+    const { data, error } = await supabase
+      .from("workout_sets")
+      .select("session_id, reps, duration_seconds, workout_sessions!inner(user_id, ended_at, started_at)")
+      .eq("workout_sessions.user_id", userId)
+      .eq("movement_id", movementId)
+      .not("workout_sessions.ended_at", "is", null)
+      .order("completed_at", { ascending: false })
+      .limit(400);
+    if (error) throw error;
+
+    const bySession = new Map<string, MovementHistoryPoint & { startedAt: string }>();
+
+    for (const row of (data ?? []) as any[]) {
+      const sessionId: string | null = row.session_id;
+      const startedAt: string | undefined = row.workout_sessions?.started_at;
+      if (!sessionId || !startedAt) continue;
+
+      if (!bySession.has(sessionId)) {
+        bySession.set(sessionId, {
+          date: toLocalDateKey(startedAt),
+          bestReps: 0,
+          bestDuration: 0,
+          setCount: 0,
+          startedAt,
+        });
+      }
+      const point = bySession.get(sessionId)!;
+      point.setCount += 1;
+      if ((row.reps ?? 0) > point.bestReps) point.bestReps = row.reps;
+      if ((row.duration_seconds ?? 0) > point.bestDuration) point.bestDuration = row.duration_seconds;
+    }
+
+    return Array.from(bySession.values())
+      .sort((a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime())
+      .slice(-limit)
+      .map(({ startedAt, ...point }) => point);
   },
 };

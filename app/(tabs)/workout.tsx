@@ -11,8 +11,21 @@ import { useProgramDay } from "../../src/hooks/useProgramDay";
 import { ActiveSessionBanner } from "../../src/components/ActiveSessionBanner";
 import { COLORS } from "../../src/constants/theme";
 import type { MovementSetLogMap, MovementWithGroupAndPrerequisites } from "../../src/types/movements";
-import { formatTarget } from "../../src/utils/targetProgress";
-import { computeFocusSuggestions, type FocusSuggestion } from "../../src/utils/workoutSuggestions";
+import { formatTarget, type TargetProgress } from "../../src/utils/targetProgress";
+import { computeFocusSuggestions, summarizeSteps, type FocusSuggestion } from "../../src/utils/workoutSuggestions";
+
+/** Hedefe kalan mesafeyi kart içinde gösteren ince çubuk. */
+function TargetProgressBar({ progress }: { progress: TargetProgress }) {
+  return (
+    <View style={styles.progressWrap}>
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: `${Math.round(progress.ratio * 100)}%` }]} />
+      </View>
+      <Text style={styles.progressLabel}>{progress.label}</Text>
+      {progress.detail && <Text style={styles.progressDetail}>{progress.detail}</Text>}
+    </View>
+  );
+}
 
 export default function WorkoutScreen() {
   const userId = useAuthStore((s) => s.session?.user.id);
@@ -51,6 +64,10 @@ export default function WorkoutScreen() {
       reloadProgram();
     }, [loadData, reloadProgram])
   );
+
+  // Tüm kategorilerin toplam basamak sayacı: "sırada ne var" listesinin üstünde
+  // kullanıcının zincirlerde nerede olduğunu tek satırda özetler.
+  const stepSummary = summarizeSteps(suggestions);
 
   const handleFreeStart = () => router.push("/workout/start");
 
@@ -152,7 +169,14 @@ export default function WorkoutScreen() {
         </View>
       )}
 
-      <Text style={styles.sectionHeader}>{isNewUser ? "Buradan Başla" : "Sırada Bu Var"}</Text>
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.sectionHeader}>{isNewUser ? "Buradan Başla" : "Sırada Bu Var"}</Text>
+        {stepSummary.total > 0 && (
+          <Text style={styles.stepSummaryText}>
+            {stepSummary.completed}/{stepSummary.total} basamak
+          </Text>
+        )}
+      </View>
       <Text style={styles.sectionSubtitle}>{isNewUser ? "Kilidi açık ilk hedefin. Diğer kategoriler Temel Güç hedeflerini tamamladıkça açılır." : "Her kategoride bir sonraki hedefin"}</Text>
 
       {loading && (
@@ -179,14 +203,33 @@ export default function WorkoutScreen() {
                 ]}
               />
               <View style={styles.cardBody}>
-                <Text style={styles.cardCategory}>{s.groupName}</Text>
+                <View style={styles.cardTopRow}>
+                  <Text style={styles.cardCategory} numberOfLines={1}>{s.groupName}</Text>
+                  <Text style={styles.cardStepBadge}>
+                    {s.stepIndex}/{s.chainLength}
+                  </Text>
+                </View>
                 <Text style={styles.cardTitle}>{s.movement.name}</Text>
                 {s.completed ? (
                   <Text style={styles.cardMetaAccent}>🏆 Bu kategoride en üst basamağa ulaştın</Text>
                 ) : s.locked ? (
-                  <Text style={styles.cardMetaLocked}>Temel Güç hazırlığı gerekiyor</Text>
+                  <>
+                    <Text style={styles.cardMetaLocked}>
+                      {s.blockingPrerequisite
+                        ? `Önce: ${s.blockingPrerequisite.name}${
+                            s.blockingPrerequisite.targetLabel ? ` — ${s.blockingPrerequisite.targetLabel}` : ""
+                          }`
+                        : "Temel Güç hazırlığı gerekiyor"}
+                    </Text>
+                    {s.blockingPrerequisite?.progress && (
+                      <TargetProgressBar progress={s.blockingPrerequisite.progress} />
+                    )}
+                  </>
                 ) : (
-                  <Text style={styles.cardMeta}>{formatTarget(s.movement) ?? `Zorluk: ${s.movement.difficulty_level}/10`}</Text>
+                  <>
+                    <Text style={styles.cardMeta}>{formatTarget(s.movement) ?? `Zorluk: ${s.movement.difficulty_level}/10`}</Text>
+                    {s.progress && <TargetProgressBar progress={s.progress} />}
+                  </>
                 )}
               </View>
               {isStarting ? (
@@ -264,6 +307,56 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   loadingBox: { paddingVertical: 40, alignItems: "center" },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  stepSummaryText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12,
+    color: COLORS.graphite,
+  },
+  cardTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  cardStepBadge: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 11,
+    color: COLORS.graphite,
+    backgroundColor: COLORS.paper,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    overflow: "hidden",
+  },
+  progressWrap: { marginTop: 8 },
+  progressTrack: {
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: COLORS.line,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: COLORS.accent,
+  },
+  progressLabel: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12,
+    color: COLORS.ink,
+    marginTop: 5,
+  },
+  progressDetail: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: COLORS.graphite,
+    marginTop: 2,
+  },
   todayCard: {
     backgroundColor: COLORS.white,
     borderRadius: 14,
@@ -332,6 +425,7 @@ const styles = StyleSheet.create({
   },
   cardBody: { flex: 1 },
   cardCategory: {
+    flex: 1,
     fontFamily: "Inter_600SemiBold",
     fontSize: 12,
     color: COLORS.graphite,
