@@ -71,10 +71,11 @@ export const progressService = {
    * TEK bir session içindeki set sayısına bakılarak değerlendirilebilsin diye
    * (bkz. src/utils/targetProgress.ts) session_id ayrımı korunuyor.
    */
-  async getMovementSetLogs(userId: string): Promise<MovementSetLogMap> {
+  async getMovementSetLogs(userId: string, excludeSessionId?: string): Promise<MovementSetLogMap> {
     const { data, error } = await supabase
       .from("workout_sets")
       .select("movement_id, session_id, reps, duration_seconds, workout_sessions!inner(user_id)")
+      .neq("session_id", excludeSessionId ?? "00000000-0000-0000-0000-000000000000")
       .eq("workout_sessions.user_id", userId);
     if (error) throw error;
 

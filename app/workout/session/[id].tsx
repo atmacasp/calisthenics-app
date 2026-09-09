@@ -220,7 +220,7 @@ export default function WorkoutSessionScreen() {
       }
       await workoutService.endSession(id, authSession.user.id);
       reset();
-      router.replace("/(tabs)/workout");
+      router.replace(`/workout/summary/${id}`);
     } catch (error: any) {
       Alert.alert("Hata", error.message ?? "Antrenman bitirilemedi");
     }
