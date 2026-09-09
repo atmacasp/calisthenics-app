@@ -1,4 +1,3 @@
-
 import { supabase } from "../lib/supabase";
 import type { SessionMovementDetail, WorkoutSessionDetail, WorkoutSessionSummary } from "../types/workouts";
 
@@ -11,13 +10,13 @@ import type { SessionMovementDetail, WorkoutSessionDetail, WorkoutSessionSummary
 export const workoutsService = {
   /**
    * Kullanıcının TAMAMLANMIŞ (ended_at dolu) antrenmanlarını en yeniden eskiye
-   * listeler. Hareket/set sayıları workout_sets'ten tek sorguda çekilip
-   * client-side gruplanır (progress.service.ts'teki aynı desen).
+   * listeler. Hareket adları da çekilir: liste ekranında bir antrenmanı ayırt
+   * eden asıl bilgi süre/set sayısı değil, ne çalışıldığıdır.
    */
   async listSessions(userId: string, limit = 50): Promise<WorkoutSessionSummary[]> {
     const { data: sessions, error: sessionsError } = await supabase
       .from("workout_sessions")
-      .select("id, started_at, ended_at, notes")
+      .select("id, started_at, ended_at, notes, programs(name)")
       .eq("user_id", userId)
       .not("ended_at", "is", null)
       .order("started_at", { ascending: false })
@@ -28,20 +27,30 @@ export const workoutsService = {
     const sessionIds = sessions.map((s) => s.id);
     const { data: sets, error: setsError } = await supabase
       .from("workout_sets")
-      .select("session_id, movement_id")
-      .in("session_id", sessionIds);
+      .select("session_id, movement_id, completed_at, movements(name)")
+      .in("session_id", sessionIds)
+      .order("completed_at", { ascending: true });
     if (setsError) throw setsError;
 
-    const statsBySession = new Map<string, { setCount: number; movementIds: Set<string> }>();
-    (sets ?? []).forEach((s) => {
+    const statsBySession = new Map<
+      string,
+      { setCount: number; movementIds: Set<string>; movementNames: string[] }
+    >();
+
+    (sets ?? []).forEach((s: any) => {
       if (!s.session_id) return;
-      const entry = statsBySession.get(s.session_id) ?? { setCount: 0, movementIds: new Set<string>() };
+      const entry =
+        statsBySession.get(s.session_id) ?? { setCount: 0, movementIds: new Set<string>(), movementNames: [] };
       entry.setCount += 1;
-      if (s.movement_id) entry.movementIds.add(s.movement_id);
+      if (s.movement_id && !entry.movementIds.has(s.movement_id)) {
+        entry.movementIds.add(s.movement_id);
+        // Setler kronolojik geldiği için isimler de çalışılma sırasında birikir.
+        if (s.movements?.name) entry.movementNames.push(s.movements.name);
+      }
       statsBySession.set(s.session_id, entry);
     });
 
-    return sessions.map((s) => {
+    return sessions.map((s: any) => {
       const stats = statsBySession.get(s.id);
       return {
         id: s.id,
@@ -50,6 +59,8 @@ export const workoutsService = {
         notes: s.notes,
         movementCount: stats?.movementIds.size ?? 0,
         setCount: stats?.setCount ?? 0,
+        movementNames: stats?.movementNames ?? [],
+        programName: s.programs?.name ?? null,
       };
     });
   },

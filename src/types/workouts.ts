@@ -1,4 +1,3 @@
-
 import type { Database } from "./database.types";
 
 export type WorkoutSessionRow = Database["public"]["Tables"]["workout_sessions"]["Row"];
@@ -12,6 +11,10 @@ export interface WorkoutSessionSummary {
   notes: string | null;
   movementCount: number;
   setCount: number;
+  /** Antrenmanı ayırt etmeye yarayan asıl bilgi: çalışılan hareketler (sırayla) */
+  movementNames: string[];
+  /** Oturum bir programdan başlatıldıysa programın adı */
+  programName: string | null;
 }
 
 /** Bir antrenman detayındaki tek bir hareket + o harekete ait setler */

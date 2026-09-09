@@ -4,11 +4,16 @@ import { useCallback, useState } from "react";
 import { router, useLocalSearchParams, Stack, useFocusEffect } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { workoutsService } from "../../../src/services/workouts.service";
+import { workoutService } from "../../../src/services/workout.service";
 import type { WorkoutSessionDetail } from "../../../src/types/workouts";
 import { COLORS } from "../../../src/constants/theme";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatDuration(startedAt: string, endedAt: string | null) {
@@ -60,6 +65,28 @@ export default function WorkoutHistoryDetailScreen() {
     }
   };
 
+  /**
+   * Geçmişteki yanlış bir seti silmek. Set kaydı rekorlara, hedef ilerlemesine
+   * ve kilit durumuna girdiği için düzeltmenin tek yolu kaydı kaldırmak.
+   */
+  const confirmRemoveSet = (setId: string, setNumber: number) => {
+    Alert.alert("Seti sil", `${setNumber}. set kaydı silinecek.`, [
+      { text: "Vazgeç", style: "cancel" },
+      {
+        text: "Sil",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await workoutService.removeSet(setId);
+            loadData();
+          } catch (error: any) {
+            Alert.alert("Hata", error.message ?? "Set silinemedi");
+          }
+        },
+      },
+    ]);
+  };
+
   const handleDelete = () => {
     if (!id) return;
     Alert.alert("Antrenmanı Sil", "Bu antrenmanı ve içindeki tüm setleri kalıcı olarak silmek istediğine emin misin?", [
@@ -106,7 +133,10 @@ export default function WorkoutHistoryDetailScreen() {
       <View style={styles.headerRow}>
         <View>
           <Text style={styles.dateText}>{formatDate(session.startedAt)}</Text>
-          {duration && <Text style={styles.durationText}>{duration}</Text>}
+          <Text style={styles.durationText}>
+            {formatTime(session.startedAt)}
+            {duration ? ` · ${duration}` : ""}
+          </Text>
         </View>
         <TouchableOpacity onPress={handleDelete} hitSlop={10}>
           <Feather name="trash-2" size={20} color={COLORS.graphite} />
@@ -118,9 +148,14 @@ export default function WorkoutHistoryDetailScreen() {
           <Text style={styles.cardTitle}>{m.movementName}</Text>
           {m.groupName && <Text style={styles.cardCategory}>{m.groupName}</Text>}
           {m.sets.map((s) => (
-            <Text key={s.id} style={styles.setLine}>
+            <View key={s.id} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <Text style={styles.setLine}>
               Set {s.setNumber}: {s.reps ? `${s.reps} tekrar` : ""} {s.durationSeconds ? `${s.durationSeconds} sn` : ""} {s.addedWeightKg ? `+${s.addedWeightKg}kg` : ""}
-            </Text>
+              </Text>
+              <TouchableOpacity onPress={() => confirmRemoveSet(s.id, s.setNumber)} hitSlop={8}>
+                <Feather name="x" size={14} color={COLORS.graphite} />
+              </TouchableOpacity>
+            </View>
           ))}
         </View>
       ))}
