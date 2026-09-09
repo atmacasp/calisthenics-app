@@ -4,6 +4,7 @@ import { Redirect } from "expo-router";
 import { useAuthStore } from "../src/store/authStore";
 import { useThemeStore } from "../src/store/themeStore";
 import { profileService } from "../src/services/profile.service";
+import { notificationsService } from "../src/services/notifications.service";
 
 export default function Index() {
   const session = useAuthStore((state) => state.session);
@@ -24,6 +25,16 @@ export default function Index() {
       const profile = await profileService.getProfile(session.user.id);
       setOnboardingCompleted(!!profile?.onboarding_completed);
       if (profile?.theme) setThemePreference(profile.theme);
+
+      // Hatırlatıcılar cihazda yaşıyor; program veya saat değişmiş olabileceği
+      // için her açılışta profildeki tercihe göre yeniden kuruluyor.
+      // Başarısız olması açılışı engellememeli.
+      notificationsService
+        .syncReminders(session.user.id, {
+          enabled: profile?.notifications_enabled ?? true,
+          hour: profile?.reminder_hour ?? 18,
+        })
+        .catch(() => {});
     } catch (error: any) {
       setLoadError(error.message ?? "Profil yüklenemedi");
     } finally {

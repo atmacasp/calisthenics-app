@@ -1,10 +1,12 @@
-import { View, Text, TouchableOpacity, ScrollView, FlatList, Dimensions, StyleSheet, Alert } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, FlatList, Dimensions, StyleSheet, Alert, ActivityIndicator } from "react-native";
 import { useEffect, useState, useCallback } from "react";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/authStore";
 import { profileService } from "../../src/services/profile.service";
 import { progressService } from "../../src/services/progress.service";
+import { useProgramDay } from "../../src/hooks/useProgramDay";
+import { ActiveSessionBanner } from "../../src/components/ActiveSessionBanner";
 import { COLORS } from "../../src/constants/theme";
 
 const WARN = "#dc2626";
@@ -35,8 +37,9 @@ export default function HomeScreen() {
   const [highlight, setHighlight] = useState<any>(null);
   const [weekDays, setWeekDays] = useState<any[]>([]);
   const [activeCard, setActiveCard] = useState(0);
-
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const { plan, starting, reload: reloadProgram, startToday, hasProgram, isRestDay } = useProgramDay(session?.user.id);
 
   const loadData = useCallback(async () => {
     if (!session) return;
@@ -61,12 +64,14 @@ export default function HomeScreen() {
 
   useEffect(() => {
     loadData();
-  }, [loadData]);
+    reloadProgram();
+  }, [loadData, reloadProgram]);
 
   useFocusEffect(
     useCallback(() => {
       loadData();
-    }, [loadData])
+      reloadProgram();
+    }, [loadData, reloadProgram])
   );
 
   const lastWorkoutDays = daysSince(profile?.last_workout_date ?? null);
@@ -81,6 +86,11 @@ export default function HomeScreen() {
   const weeklyDelta = weekly.thisWeekWorkouts - weekly.lastWeekWorkouts;
   const weeklyDeltaText =
     weeklyDelta > 0 ? `+${weeklyDelta} geçen haftaya göre` : weeklyDelta < 0 ? `${weeklyDelta} geçen haftaya göre` : "geçen haftayla aynı";
+
+  // Bugün program günüyse ana buton serbest antrenman değil, o günün antrenmanını açar.
+  const isProgramDay = hasProgram && !isRestDay;
+  const previewMovements = plan?.movements.slice(0, 3) ?? [];
+  const remainingCount = (plan?.movements.length ?? 0) - previewMovements.length;
 
   const cards = [
     {
@@ -182,6 +192,8 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      <ActiveSessionBanner userId={session?.user.id} />
+
       <View style={styles.heroPanel}>
         <View style={{ flex: 1 }}>
           <Text style={styles.heroLabel}>Antrenman Serisi</Text>
@@ -202,17 +214,69 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      {isProgramDay && plan && (
+        <TouchableOpacity
+          style={styles.programCard}
+          activeOpacity={0.75}
+          onPress={() => router.push(`/programs/${plan.program.id}`)}
+        >
+          <View style={styles.programHeaderRow}>
+            <Ionicons name="calendar-outline" size={13} color={COLORS.accent} />
+            <Text style={styles.programName} numberOfLines={1}>{plan.program.name}</Text>
+            <Ionicons name="chevron-forward" size={14} color={COLORS.graphite} />
+          </View>
+          <Text style={styles.programDay}>Bugün · {plan.dayName}</Text>
+          <View style={styles.chipRow}>
+            {previewMovements.map((pm) => (
+              <View key={pm.id} style={styles.chip}>
+                <Text style={styles.chipText} numberOfLines={1}>{pm.movementName}</Text>
+              </View>
+            ))}
+            {remainingCount > 0 && (
+              <View style={styles.chip}>
+                <Text style={styles.chipText}>+{remainingCount}</Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {hasProgram && isRestDay && plan && (
+        <View style={styles.restBanner}>
+          <Text style={styles.restBannerText}>Bugün dinlenme günü 🌿</Text>
+          <Text style={styles.restBannerSub} numberOfLines={1}>{plan.program.name} · {plan.dayName}</Text>
+        </View>
+      )}
+
       <TouchableOpacity
-        onPress={() => router.push("/workout/start")}
+        onPress={isProgramDay ? startToday : () => router.push("/workout/start")}
         activeOpacity={0.85}
+        disabled={starting}
         style={styles.ctaButton}
       >
         <View style={styles.ctaIconCircle}>
-          <MaterialCommunityIcons name="dumbbell" size={18} color={COLORS.white} />
+          {starting ? (
+            <ActivityIndicator size="small" color={COLORS.white} />
+          ) : (
+            <MaterialCommunityIcons name="dumbbell" size={18} color={COLORS.white} />
+          )}
         </View>
-        <Text style={styles.ctaText}>Antrenmana Başla</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.ctaText}>{isProgramDay ? "Bugünün Antrenmanına Başla" : "Antrenmana Başla"}</Text>
+          {isProgramDay && plan && (
+            <Text style={styles.ctaSubtext} numberOfLines={1}>
+              {plan.movements.length} hareket hazır yüklenecek
+            </Text>
+          )}
+        </View>
         <Ionicons name="chevron-forward" size={20} color={COLORS.white} />
       </TouchableOpacity>
+
+      {isProgramDay && (
+        <TouchableOpacity style={styles.secondaryLink} onPress={() => router.push("/workout/start")} activeOpacity={0.7}>
+          <Text style={styles.secondaryLinkText}>Bunun yerine serbest antrenman başlat</Text>
+        </TouchableOpacity>
+      )}
 
       <FlatList
         data={cards}
@@ -238,6 +302,20 @@ export default function HomeScreen() {
       </View>
 
       <Text style={styles.sectionTitle}>Devam et</Text>
+
+      <TouchableOpacity style={styles.quickCard} onPress={() => router.push("/programs")} activeOpacity={0.75}>
+        <View style={styles.quickAccentBar} />
+        <View style={styles.quickIconBox}>
+          <Ionicons name="calendar-outline" size={20} color={COLORS.accent} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.quickTitle}>Programlar</Text>
+          <Text style={styles.quickSubtitle}>
+            {hasProgram ? "Planını gör ya da değiştir" : "Bir program seç, haftanı planla"}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={COLORS.graphite} />
+      </TouchableOpacity>
 
       <TouchableOpacity style={styles.quickCard} onPress={() => router.push("/(tabs)/library")} activeOpacity={0.75}>
         <View style={styles.quickAccentBar} />
@@ -290,6 +368,39 @@ const styles = StyleSheet.create({
   weekDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: "rgba(250,249,246,0.15)" },
   weekDotFilled: { backgroundColor: COLORS.accent },
   weekDotToday: { borderWidth: 2, borderColor: "rgba(250,249,246,0.5)" },
+  programCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.3)",
+    marginHorizontal: 20,
+    marginTop: 14,
+    padding: 14,
+  },
+  programHeaderRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  programName: {
+    flex: 1,
+    fontFamily: "Inter_700Bold",
+    fontSize: 12,
+    color: COLORS.accent,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  programDay: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.ink, marginTop: 6 },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 },
+  chip: { backgroundColor: COLORS.paper, borderWidth: 1, borderColor: COLORS.line, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 5, maxWidth: "100%" },
+  chipText: { fontFamily: "Inter_500Medium", fontSize: 12, color: COLORS.graphite },
+  restBanner: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    marginHorizontal: 20,
+    marginTop: 14,
+    padding: 14,
+  },
+  restBannerText: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.ink },
+  restBannerSub: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, marginTop: 2 },
   ctaButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -299,10 +410,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     gap: 12,
     marginHorizontal: 20,
-    marginTop: 18,
+    marginTop: 14,
   },
   ctaIconCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" },
-  ctaText: { flex: 1, fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.white },
+  ctaText: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.white },
+  ctaSubtext: { fontFamily: "Inter_400Regular", fontSize: 12, color: "rgba(255,255,255,0.8)", marginTop: 2 },
+  secondaryLink: { alignItems: "center", marginTop: 10 },
+  secondaryLinkText: { fontFamily: "Inter_500Medium", fontSize: 13, color: COLORS.graphite, textDecorationLine: "underline" },
   statsCard: { flexDirection: "row", backgroundColor: COLORS.white, borderRadius: 20, paddingVertical: 20, minHeight: 150, borderWidth: 1, borderColor: COLORS.line },
   statCol: { flex: 1, alignItems: "center", gap: 6 },
   statDivider: { width: 1, backgroundColor: COLORS.line },

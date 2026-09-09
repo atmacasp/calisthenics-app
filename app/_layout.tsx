@@ -1,6 +1,4 @@
-
 import { useEffect } from "react";
-import { useColorScheme } from "react-native";
 import { Stack } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -13,14 +11,13 @@ import {
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
 import { useAuthStore } from "../src/store/authStore";
-import { useThemeStore } from "../src/store/themeStore";
+import { notificationsService } from "../src/services/notifications.service";
+import { COLORS } from "../src/constants/theme";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const initialize = useAuthStore((state) => state.initialize);
-  const systemScheme = useColorScheme();
-  const preference = useThemeStore((s) => s.preference);
 
   const [fontsLoaded] = useFonts({
     BebasNeue_400Regular,
@@ -32,6 +29,9 @@ export default function RootLayout() {
 
   useEffect(() => {
     initialize();
+    // expo-notifications Expo Go/Android'de import edilemiyor; servis modülü
+    // tembel yüklediği için burada güvenle çağrılabilir (o ortamda no-op).
+    notificationsService.configureHandler();
   }, []);
 
   useEffect(() => {
@@ -42,20 +42,19 @@ export default function RootLayout() {
 
   if (!fontsLoaded) return null;
 
-  const effectiveScheme = preference === "system" ? systemScheme : preference;
-
+  // Tüm ekranlar tek açık palette (theme.ts) kullanıyor. Eskiden burada tema
+  // tercihine göre siyah/beyaz seçiliyordu; "Koyu" seçiliyken açık zemine
+  // beyaz status bar ikonları çizildiği için okunmuyordu. Gerçek koyu tema
+  // gelene kadar sabit.
   return (
     <SafeAreaProvider>
-      <StatusBar style={effectiveScheme === "dark" ? "light" : "dark"} />
+      <StatusBar style="dark" />
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: {
-            backgroundColor: effectiveScheme === "dark" ? "#000000" : "#ffffff",
-          },
+          contentStyle: { backgroundColor: COLORS.paper },
         }}
       />
     </SafeAreaProvider>
   );
 }
-

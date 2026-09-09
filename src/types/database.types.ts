@@ -24,6 +24,7 @@ export interface Database {
           theme: "system" | "light" | "dark";
           language: string;
           notifications_enabled: boolean;
+          reminder_hour: number;
           current_streak: number;
           longest_streak: number;
           last_workout_date: string | null;
@@ -40,6 +41,7 @@ export interface Database {
           theme?: "system" | "light" | "dark";
           language?: string;
           notifications_enabled?: boolean;
+          reminder_hour?: number;
           current_streak?: number;
           longest_streak?: number;
           last_workout_date?: string | null;

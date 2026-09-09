@@ -6,6 +6,7 @@ import { useAuthStore } from "../../src/store/authStore";
 import { useThemeStore } from "../../src/store/themeStore";
 import { profileService } from "../../src/services/profile.service";
 import { authService } from "../../src/services/auth.service";
+import { notificationsService, describeReminders } from "../../src/services/notifications.service";
 import { COLORS } from "../../src/constants/theme";
 
 const DANGER = "#dc2626";
@@ -16,6 +17,8 @@ const LEVEL_LABELS: Record<string, string> = {
   advanced: "İleri Seviye",
 };
 
+const REMINDER_HOURS = [6, 7, 8, 9, 12, 17, 18, 19, 20, 21, 22];
+
 export default function ProfileScreen() {
   const session = useAuthStore((s) => s.session);
   const themePreference = useThemeStore((s) => s.preference);
@@ -25,6 +28,8 @@ export default function ProfileScreen() {
   const [profile, setProfile] = useState<any>(null);
   const [unit, setUnit] = useState<"metric" | "imperial">("metric");
   const [notifications, setNotifications] = useState(true);
+  const [reminderHour, setReminderHour] = useState(18);
+  const [reminderStatus, setReminderStatus] = useState<string>("");
   const [language, setLanguage] = useState<"tr" | "en">("tr");
   const [saving, setSaving] = useState(false);
 
@@ -36,6 +41,7 @@ export default function ProfileScreen() {
         setProfile(data);
         setUnit(data.unit_preference ?? "metric");
         setNotifications(data.notifications_enabled ?? true);
+        setReminderHour(data.reminder_hour ?? 18);
         setLanguage((data.language as "tr" | "en") ?? "tr");
       })
       .catch((error: any) => Alert.alert("Hata", error.message ?? "Profil yüklenemedi"))
@@ -54,14 +60,47 @@ export default function ProfileScreen() {
     }
   };
 
+  /**
+   * Hatırlatıcılar tamamen cihazda zamanlanıyor. Tercih değiştiğinde önce
+   * DB'ye yazıp sonra zamanlamayı baştan kuruyoruz - servis her seferinde
+   * mevcut bildirimleri silip yeniden planlıyor.
+   */
+  const applyReminders = async (enabled: boolean, hour: number) => {
+    if (!session) return;
+    setSaving(true);
+    try {
+      const result = await notificationsService.syncReminders(session.user.id, { enabled, hour, requestPermission: true });
+      setReminderStatus(enabled ? describeReminders(result, hour) : "");
+      if (result.permissionDenied) {
+        setNotifications(false);
+        await profileService.updateProfile(session.user.id, { notifications_enabled: false });
+        Alert.alert(
+          "Bildirim izni yok",
+          "Hatırlatıcı kurabilmem için telefon ayarlarından bu uygulamaya bildirim izni vermen gerekiyor."
+        );
+      }
+    } catch (error: any) {
+      Alert.alert("Hata", error.message ?? "Hatırlatıcı kurulamadı");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleUnitChange = (value: "metric" | "imperial") => {
     setUnit(value);
     persist({ unit_preference: value });
   };
 
-  const handleNotificationsToggle = (value: boolean) => {
+  const handleNotificationsToggle = async (value: boolean) => {
     setNotifications(value);
-    persist({ notifications_enabled: value });
+    await persist({ notifications_enabled: value });
+    await applyReminders(value, reminderHour);
+  };
+
+  const handleReminderHourChange = async (hour: number) => {
+    setReminderHour(hour);
+    await persist({ reminder_hour: hour });
+    if (notifications) await applyReminders(true, hour);
   };
 
   const handleThemeChange = (value: "system" | "light" | "dark") => {
@@ -76,6 +115,7 @@ export default function ProfileScreen() {
 
   const handleSignOut = async () => {
     try {
+      await notificationsService.cancelAll();
       await authService.signOut();
       router.replace("/(auth)/login");
     } catch (error: any) {
@@ -94,6 +134,7 @@ export default function ProfileScreen() {
           style: "destructive",
           onPress: async () => {
             try {
+              await notificationsService.cancelAll();
               await authService.deleteAccount();
               await authService.signOut();
               router.replace("/(auth)/login");
@@ -172,12 +213,12 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.sectionTitle}>Bildirimler</Text>
+      <Text style={styles.sectionTitle}>Antrenman Hatırlatıcısı</Text>
       <View style={styles.switchRow}>
         <View style={styles.switchIconBox}>
           <Ionicons name="notifications-outline" size={18} color={COLORS.accent} />
         </View>
-        <Text style={styles.switchLabel}>Bildirimleri Etkinleştir</Text>
+        <Text style={styles.switchLabel}>Hatırlatıcıyı Aç</Text>
         <Switch
           value={notifications}
           onValueChange={handleNotificationsToggle}
@@ -185,6 +226,30 @@ export default function ProfileScreen() {
           thumbColor={COLORS.white}
         />
       </View>
+
+      {notifications && (
+        <>
+          <Text style={[styles.helperText, { marginTop: 12, marginBottom: 8 }]}>Hangi saatte hatırlatılsın?</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {REMINDER_HOURS.map((hour) => (
+              <TouchableOpacity
+                key={hour}
+                style={[styles.optionButtonSmall, { marginRight: 8, minWidth: 68, flex: 0 }, reminderHour === hour && styles.optionActive]}
+                onPress={() => handleReminderHourChange(hour)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.optionTextSmall, reminderHour === hour && styles.optionTextActive]}>
+                  {String(hour).padStart(2, "0")}:00
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <Text style={styles.helperText}>
+            {reminderStatus ||
+              "Takip ettiğin program varsa yalnızca antrenman günlerinde, yoksa her gün hatırlatılır."}
+          </Text>
+        </>
+      )}
 
       <Text style={styles.sectionTitle}>Tema</Text>
       <View style={styles.rowButtons}>

@@ -37,10 +37,11 @@ export const progressService = {
     return { totalWorkouts: totalWorkouts ?? 0, totalSets, mostTrainedCategory };
   },
 
-  async getPersonalRecords(userId: string) {
+  async getPersonalRecords(userId: string, excludeSessionId?: string) {
     const { data, error } = await supabase
       .from("workout_sets")
       .select("movement_id, reps, duration_seconds, added_weight_kg, movements(name, movement_groups(name)), workout_sessions!inner(user_id)")
+      .neq("session_id", excludeSessionId ?? "00000000-0000-0000-0000-000000000000")
       .eq("workout_sessions.user_id", userId);
     if (error) throw error;
 

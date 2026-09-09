@@ -10,6 +10,7 @@ import { workoutsService } from "../../../src/services/workouts.service";
 import { progressService } from "../../../src/services/progress.service";
 import { COLORS } from "../../../src/constants/theme";
 import { formatTarget } from "../../../src/utils/targetProgress";
+import { useSetRemoval } from "../../../src/hooks/useSetRemoval";
 
 const REST_SECONDS = 60;
 
@@ -95,6 +96,7 @@ export default function WorkoutSessionScreen() {
   const sessionProgramLabel = useWorkoutStore((s) => s.sessionProgramLabel);
   const addSetToMovement = useWorkoutStore((s) => s.addSetToMovement);
   const removeMovement = useWorkoutStore((s) => s.removeMovement);
+  const { confirmRemoveSet } = useSetRemoval();
   const reset = useWorkoutStore((s) => s.reset);
 
   const [inputs, setInputs] = useState<Record<string, { reps: string; duration: string; weight: string }>>({});
@@ -118,7 +120,7 @@ export default function WorkoutSessionScreen() {
 
   useEffect(() => {
     if (!authSession) return;
-    progressService.getPersonalRecords(authSession.user.id).then((records) => {
+    progressService.getPersonalRecords(authSession.user.id, id).then((records) => {
       const map: Record<string, PersonalBest> = {};
       records.forEach((r) => {
         map[r.movementId] = { maxReps: r.maxReps, maxDuration: r.maxDuration, maxWeight: r.maxWeight };
@@ -198,7 +200,7 @@ export default function WorkoutSessionScreen() {
       });
       addSetToMovement(movementId, saved);
       setInputs((prev) => ({ ...prev, [movementId]: { reps: "", duration: "", weight: "" } }));
-      setRestLeft(REST_SECONDS);
+      setRestLeft(movement.restSeconds ?? REST_SECONDS);
     } catch (error: any) {
       Alert.alert("Hata", error.message ?? "Set kaydedilemedi");
     }
@@ -320,6 +322,9 @@ export default function WorkoutSessionScreen() {
                         <View style={styles.setBadges}>
                           {metTarget && <Text style={styles.targetMetBadge}>✓ Hedef</Text>}
                           {recordHolderIds.has(s.id) && <Text style={styles.prBadge}>🏆 Yeni Rekor!</Text>}
+                          <TouchableOpacity hitSlop={8} onPress={() => confirmRemoveSet(s.id, movement.movementId, i + 1)}>
+                            <Feather name="x" size={14} color={COLORS.graphite} />
+                          </TouchableOpacity>
                         </View>
                       </View>
                     );

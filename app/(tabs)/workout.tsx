@@ -1,4 +1,3 @@
-
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
 import { useCallback, useState } from "react";
 import { router, useFocusEffect } from "expo-router";
@@ -6,12 +5,12 @@ import { Feather } from "@expo/vector-icons";
 import { movementsService } from "../../src/services/movements.service";
 import { progressService } from "../../src/services/progress.service";
 import { workoutService } from "../../src/services/workout.service";
-import { programsService } from "../../src/services/programs.service";
 import { useAuthStore } from "../../src/store/authStore";
 import { useWorkoutStore } from "../../src/store/workoutStore";
+import { useProgramDay } from "../../src/hooks/useProgramDay";
+import { ActiveSessionBanner } from "../../src/components/ActiveSessionBanner";
 import { COLORS } from "../../src/constants/theme";
 import type { MovementSetLogMap, MovementWithGroupAndPrerequisites } from "../../src/types/movements";
-import type { TodayProgramPlan } from "../../src/types/programs";
 import { formatTarget } from "../../src/utils/targetProgress";
 import { computeFocusSuggestions, type FocusSuggestion } from "../../src/utils/workoutSuggestions";
 
@@ -20,26 +19,22 @@ export default function WorkoutScreen() {
   const startSession = useWorkoutStore((s) => s.startSession);
   const addMovement = useWorkoutStore((s) => s.addMovement);
 
+  // Bugünün program planı ve "tek dokunuşla başlat" mantığı Ana Sayfa ile ortak
+  // hook'tan geliyor - eskiden bu ekranda ayrı bir kopyası duruyordu.
+  const { plan, starting, reload: reloadProgram, startToday } = useProgramDay(userId);
+
   const [suggestions, setSuggestions] = useState<FocusSuggestion[]>([]);
-  const [todayPlan, setTodayPlan] = useState<TodayProgramPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [startingId, setStartingId] = useState<string | null>(null);
-  const [startingProgram, setStartingProgram] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!userId) return;
     try {
-      const [movements, setLogMap, plan]: [
-        MovementWithGroupAndPrerequisites[],
-        MovementSetLogMap,
-        TodayProgramPlan | null
-      ] = await Promise.all([
+      const [movements, setLogMap]: [MovementWithGroupAndPrerequisites[], MovementSetLogMap] = await Promise.all([
         movementsService.getAllMovementsWithPrerequisites(),
         progressService.getMovementSetLogs(userId),
-        programsService.getActiveProgramForToday(userId),
       ]);
       setSuggestions(computeFocusSuggestions(movements, setLogMap));
-      setTodayPlan(plan);
     } finally {
       setLoading(false);
     }
@@ -50,7 +45,8 @@ export default function WorkoutScreen() {
   useFocusEffect(
     useCallback(() => {
       loadData();
-    }, [loadData])
+      reloadProgram();
+    }, [loadData, reloadProgram])
   );
 
   const handleFreeStart = () => router.push("/workout/start");
@@ -84,33 +80,12 @@ export default function WorkoutScreen() {
     }
   };
 
-  const handleStartProgramDay = async () => {
-    if (!userId || !todayPlan || startingProgram || todayPlan.movements.length === 0) return;
-    setStartingProgram(true);
-    try {
-      const newSession = await workoutService.startSession(userId, todayPlan.program.id);
-      startSession(newSession.id, `${todayPlan.program.name} · ${todayPlan.dayName}`);
-      todayPlan.movements.forEach((pm) => {
-        if (!pm.movementId) return;
-        addMovement({
-          id: pm.movementId,
-          name: pm.movementName,
-          targetType: pm.targetDurationSeconds ? "duration" : "reps_sets",
-          targetSets: pm.targetSets,
-          targetReps: pm.targetReps,
-          targetDurationSeconds: pm.targetDurationSeconds,
-        });
-      });
-      router.push(`/workout/session/${newSession.id}`);
-    } finally {
-      setStartingProgram(false);
-    }
-  };
-
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <Text style={styles.title}>Antrenman</Text>
       <Text style={styles.subtitle}>Hazır olduğunda antrenmanına başla, ya da sıradaki hedeflerinden birine dokun.</Text>
+
+      <ActiveSessionBanner userId={userId} style={{ marginHorizontal: 0, marginTop: 0, marginBottom: 20 }} />
 
       <TouchableOpacity style={styles.primaryButton} activeOpacity={0.85} onPress={handleFreeStart}>
         <Text style={styles.primaryButtonText}>Antrenman Başlat</Text>
@@ -135,19 +110,19 @@ export default function WorkoutScreen() {
         </TouchableOpacity>
       </View>
 
-      {todayPlan && (
+      {plan && (
         <View style={styles.todayCard}>
           <View style={styles.todayHeaderRow}>
             <Feather name="calendar" size={14} color={COLORS.accent} />
-            <Text style={styles.todayProgramName}>{todayPlan.program.name}</Text>
+            <Text style={styles.todayProgramName}>{plan.program.name}</Text>
           </View>
-          <Text style={styles.todayDayName}>{todayPlan.dayName}</Text>
+          <Text style={styles.todayDayName}>{plan.dayName}</Text>
 
-          {todayPlan.movements.length === 0 ? (
+          {plan.movements.length === 0 ? (
             <Text style={styles.restDayText}>Bugün dinlenme günü 🌿</Text>
           ) : (
             <>
-              {todayPlan.movements.map((pm) => (
+              {plan.movements.map((pm) => (
                 <View key={pm.id} style={styles.todayMovementRow}>
                   <Text style={styles.todayMovementName}>{pm.movementName}</Text>
                   <Text style={styles.todayMovementTarget}>
@@ -160,10 +135,10 @@ export default function WorkoutScreen() {
               <TouchableOpacity
                 style={styles.todayStartButton}
                 activeOpacity={0.85}
-                disabled={startingProgram}
-                onPress={handleStartProgramDay}
+                disabled={starting}
+                onPress={startToday}
               >
-                {startingProgram ? (
+                {starting ? (
                   <ActivityIndicator size="small" color={COLORS.white} />
                 ) : (
                   <Text style={styles.todayStartButtonText}>Bugünün Antrenmanına Başla</Text>
