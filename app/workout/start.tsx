@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { useAuthStore } from "../../src/store/authStore";
 import { useWorkoutStore } from "../../src/store/workoutStore";
 import { workoutService } from "../../src/services/workout.service";
+import { COLORS } from "../../src/constants/theme";
 
 export default function WorkoutStartScreen() {
   const session = useAuthStore((s) => s.session);
@@ -73,9 +74,9 @@ export default function WorkoutStartScreen() {
   }, [session]);
 
   return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-      <ActivityIndicator />
-      <Text style={{ marginTop: 12 }}>Antrenman hazırlanıyor...</Text>
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.paper }}>
+      <ActivityIndicator color={COLORS.accent} />
+      <Text style={{ marginTop: 12, fontFamily: "Inter_400Regular", color: COLORS.graphite }}>Antrenman hazırlanıyor...</Text>
     </View>
   );
 }

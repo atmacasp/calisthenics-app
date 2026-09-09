@@ -1,13 +1,35 @@
-import { View, Text, TouchableOpacity, Alert, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, Alert, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
 import { useState } from "react";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useOnboardingStore } from "../../src/store/onboardingStore";
 import { useAuthStore } from "../../src/store/authStore";
 import { profileService } from "../../src/services/profile.service";
 import { bodyWeightService } from "../../src/services/bodyweight.service";
+import { COLORS } from "../../src/constants/theme";
+
+type Level = "beginner" | "intermediate" | "advanced";
+
+const LEVELS: { value: Level; label: string; description: string }[] = [
+  {
+    value: "beginner",
+    label: "Başlangıç",
+    description: "Şınav, squat, mekik gibi temel hareketlerde henüz yol alıyorum.",
+  },
+  {
+    value: "intermediate",
+    label: "Orta Seviye",
+    description: "Temel hareketleri rahat yapıyorum, progression basamaklarına geçiyorum.",
+  },
+  {
+    value: "advanced",
+    label: "İleri Seviye",
+    description: "Planche, front lever gibi ileri statik hareketlerde çalışıyorum.",
+  },
+];
 
 export default function LevelScreen() {
-  const [level, setLevel] = useState<"beginner" | "intermediate" | "advanced" | null>(null);
+  const [level, setLevel] = useState<Level | null>(null);
   const [loading, setLoading] = useState(false);
   const onboardingData = useOnboardingStore((s) => s);
   const session = useAuthStore((s) => s.session);
@@ -39,35 +61,106 @@ export default function LevelScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Seviyeni Seç</Text>
-      <Text style={styles.subtitle}>Sana uygun programı önerebilmemiz için.</Text>
+    <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+      <View style={styles.stepRow}>
+        <View style={styles.stepDotActive} />
+        <View style={styles.stepDotActive} />
+        <Text style={styles.stepText}>Adım 2 / 2</Text>
+      </View>
 
-      <TouchableOpacity style={[styles.option, level === "beginner" && styles.optionActive]} onPress={() => setLevel("beginner")}>
-        <Text style={level === "beginner" ? styles.optionTextActive : styles.optionText}>Başlangıç</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={[styles.option, level === "intermediate" && styles.optionActive]} onPress={() => setLevel("intermediate")}>
-        <Text style={level === "intermediate" ? styles.optionTextActive : styles.optionText}>Orta Seviye</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={[styles.option, level === "advanced" && styles.optionActive]} onPress={() => setLevel("advanced")}>
-        <Text style={level === "advanced" ? styles.optionTextActive : styles.optionText}>İleri Seviye</Text>
+      <Text style={styles.title}>Seviyeni seç</Text>
+      <Text style={styles.subtitle}>
+        Nereden başlayacağını belirler. Sonradan Profil'den değiştirebilirsin.
+      </Text>
+
+      {LEVELS.map((option) => {
+        const selected = level === option.value;
+        return (
+          <TouchableOpacity
+            key={option.value}
+            style={[styles.card, selected && styles.cardSelected]}
+            onPress={() => setLevel(option.value)}
+            activeOpacity={0.8}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.cardTitle, selected && styles.cardTitleSelected]}>{option.label}</Text>
+              <Text style={styles.cardDescription}>{option.description}</Text>
+            </View>
+            <Ionicons
+              name={selected ? "checkmark-circle" : "ellipse-outline"}
+              size={22}
+              color={selected ? COLORS.accent : COLORS.line}
+            />
+          </TouchableOpacity>
+        );
+      })}
+
+      <TouchableOpacity
+        style={[styles.button, !level && styles.buttonDisabled]}
+        onPress={onSubmit}
+        disabled={!level || loading}
+        activeOpacity={0.85}
+      >
+        {loading ? (
+          <ActivityIndicator size="small" color={COLORS.white} />
+        ) : (
+          <Text style={styles.buttonText}>Tamamla</Text>
+        )}
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.button} onPress={onSubmit} disabled={!level || loading}>
-        <Text style={styles.buttonText}>{loading ? "Kaydediliyor..." : "Tamamla"}</Text>
+      <TouchableOpacity style={styles.backRow} onPress={() => router.back()} disabled={loading}>
+        <Ionicons name="arrow-back" size={14} color={COLORS.graphite} />
+        <Text style={styles.backText}>Geri</Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 24 },
-  title: { fontSize: 24, fontWeight: "bold", marginBottom: 8, textAlign: "center" },
-  subtitle: { fontSize: 14, color: "#6b7280", marginBottom: 24, textAlign: "center" },
-  option: { padding: 16, borderWidth: 1, borderColor: "#ccc", borderRadius: 8, marginBottom: 12, alignItems: "center" },
-  optionActive: { backgroundColor: "#22c55e", borderColor: "#22c55e" },
-  optionText: { color: "#374151", fontWeight: "500" },
-  optionTextActive: { color: "white", fontWeight: "700" },
-  button: { backgroundColor: "#111827", padding: 16, borderRadius: 8, marginTop: 16 },
-  buttonText: { color: "white", textAlign: "center", fontWeight: "600" },
+  flex: { flex: 1, backgroundColor: COLORS.paper },
+  content: { flexGrow: 1, justifyContent: "center", padding: 24, paddingVertical: 40 },
+  stepRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 18 },
+  stepDotActive: { width: 18, height: 4, borderRadius: 2, backgroundColor: COLORS.accent },
+  stepText: { fontFamily: "Inter_500Medium", fontSize: 11, color: COLORS.graphite, marginLeft: 6 },
+  title: { fontFamily: "Inter_700Bold", fontSize: 26, color: COLORS.ink },
+  subtitle: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    color: COLORS.graphite,
+    marginTop: 4,
+    marginBottom: 22,
+    lineHeight: 20,
+  },
+  card: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 10,
+  },
+  cardSelected: { borderColor: COLORS.accent, backgroundColor: "rgba(34,197,94,0.06)" },
+  cardTitle: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.ink },
+  cardTitleSelected: { color: COLORS.accent },
+  cardDescription: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: COLORS.graphite,
+    marginTop: 4,
+    lineHeight: 17,
+  },
+  button: {
+    backgroundColor: COLORS.accent,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: "center",
+    marginTop: 20,
+  },
+  buttonDisabled: { backgroundColor: COLORS.line },
+  buttonText: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.white },
+  backRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 18 },
+  backText: { fontFamily: "Inter_500Medium", fontSize: 13, color: COLORS.graphite },
 });

@@ -4,6 +4,7 @@ import { Redirect } from "expo-router";
 import { useAuthStore } from "../src/store/authStore";
 import { useThemeStore } from "../src/store/themeStore";
 import { profileService } from "../src/services/profile.service";
+import { COLORS } from "../src/constants/theme";
 import { notificationsService } from "../src/services/notifications.service";
 
 export default function Index() {
@@ -48,21 +49,21 @@ export default function Index() {
 
   if (isLoading || (session && checkingProfile)) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator />
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.paper }}>
+        <ActivityIndicator color={COLORS.accent} />
       </View>
     );
   }
 
   if (session && loadError) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24, backgroundColor: COLORS.paper }}>
         <Text style={{ textAlign: "center", marginBottom: 16, color: "#374151" }}>
           Profil yüklenirken bir sorun oluştu.{"\n"}Telefonunun tarih/saat ayarının "otomatik" olduğundan emin ol.
         </Text>
         <TouchableOpacity
           onPress={checkProfile}
-          style={{ backgroundColor: "#22c55e", paddingVertical: 12, paddingHorizontal: 24, borderRadius: 8 }}
+          style={{ backgroundColor: COLORS.accent, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 8 }}
         >
           <Text style={{ color: "white", fontWeight: "700" }}>Tekrar Dene</Text>
         </TouchableOpacity>
