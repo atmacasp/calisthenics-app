@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert } from "react-native";
 import { useCallback, useEffect, useState } from "react";
 import { router, useLocalSearchParams, Stack } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -7,9 +7,20 @@ import { workoutsService } from "../../../src/services/workouts.service";
 import { movementsService } from "../../../src/services/movements.service";
 import { progressService } from "../../../src/services/progress.service";
 import { profileService } from "../../../src/services/profile.service";
+import { programsService } from "../../../src/services/programs.service";
 import { computeWorkoutAchievements, type WorkoutAchievements } from "../../../src/utils/workoutSummary";
+import { computeProgramUpgrades, type ProgramUpgrade } from "../../../src/utils/programUpgrades";
 import type { WorkoutSessionDetail } from "../../../src/types/workouts";
 import { COLORS } from "../../../src/constants/theme";
+
+/** Aktif programda, bu antrenmanda tamamlanan hedeflerden doğan terfi önerileri. */
+interface ProgramUpgradeState {
+  programId: string;
+  programName: string;
+  /** Program kullanıcının kendi programı mı - değilse yükseltme yapılamaz (RLS). */
+  editable: boolean;
+  upgrades: ProgramUpgrade[];
+}
 
 function formatDuration(startedAt: string, endedAt: string | null): string {
   if (!endedAt) return "-";
@@ -30,25 +41,84 @@ export default function WorkoutSummaryScreen() {
     unlockedSteps: [],
   });
   const [streak, setStreak] = useState(0);
+  const [programUpgrade, setProgramUpgrade] = useState<ProgramUpgradeState | null>(null);
+  const [upgradingId, setUpgradingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!id || !userId) return;
     try {
-      const [sessionDetail, movements, afterMap, beforeMap, profile] = await Promise.all([
+      const [sessionDetail, movements, afterMap, beforeMap, profile, activeProgram] = await Promise.all([
         workoutsService.getSessionDetail(id),
         movementsService.getAllMovementsWithPrerequisites(),
         progressService.getMovementSetLogs(userId),
         // Bu antrenman hariç durum: farkı almak için referans nokta.
         progressService.getMovementSetLogs(userId, id),
         profileService.getProfile(userId),
+        programsService.getActiveUserProgram(userId),
       ]);
+      const achieved = computeWorkoutAchievements(movements, beforeMap, afterMap);
       setDetail(sessionDetail);
-      setAchievements(computeWorkoutAchievements(movements, beforeMap, afterMap));
+      setAchievements(achieved);
       setStreak(profile?.current_streak ?? 0);
+
+      // Terfi önerisi sadece BU antrenmanda tamamlanan hedeflerden doğsun -
+      // özet ekranı bugünün hikâyesini anlatır, birikmiş listeyi değil.
+      // (Eski terfiler program detayında durmaya devam eder.)
+      if (activeProgram?.program_id) {
+        const program = await programsService.getProgramWithDays(activeProgram.program_id);
+        if (program) {
+          const completedIds = new Set(achieved.completedTargets.map((m) => m.id));
+          const relevant = computeProgramUpgrades(program.daysMap, movements, afterMap).filter((u) =>
+            completedIds.has(u.currentMovementId)
+          );
+          if (relevant.length > 0) {
+            setProgramUpgrade({
+              programId: program.id,
+              programName: program.name,
+              editable: program.user_id === userId,
+              upgrades: relevant,
+            });
+          }
+        }
+      }
     } finally {
       setLoading(false);
     }
   }, [id, userId]);
+
+  const handleUpgrade = (upgrade: ProgramUpgrade) => {
+    Alert.alert(
+      "Programı Güncelle",
+      `"${upgrade.currentName}" yerine "${upgrade.nextMovement.name}" gelecek. Gün, sıra ve dinlenme süresi aynı kalır.`,
+      [
+        { text: "Şimdi değil", style: "cancel" },
+        {
+          text: "Güncelle",
+          onPress: async () => {
+            setUpgradingId(upgrade.programMovementId);
+            try {
+              await programsService.upgradeProgramMovement(upgrade.programMovementId, {
+                id: upgrade.nextMovement.id,
+                target_sets: upgrade.nextMovement.target_sets,
+                target_reps: upgrade.nextMovement.target_reps,
+                target_duration_seconds: upgrade.nextMovement.target_duration_seconds,
+              });
+              // Uygulanan satırı listeden düşür; hepsi bittiyse bölüm kapanır.
+              setProgramUpgrade((prev) => {
+                if (!prev) return prev;
+                const rest = prev.upgrades.filter((u) => u.programMovementId !== upgrade.programMovementId);
+                return rest.length ? { ...prev, upgrades: rest } : null;
+              });
+            } catch (error: any) {
+              Alert.alert("Hata", error.message ?? "Basamak yükseltilemedi");
+            } finally {
+              setUpgradingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   useEffect(() => {
     load();
@@ -145,6 +215,57 @@ export default function WorkoutSummaryScreen() {
         </>
       )}
 
+      {programUpgrade && (
+        <>
+          <Text style={styles.sectionTitle}>Programını güncelle</Text>
+          <View style={styles.programCard}>
+            <View style={styles.programHeaderRow}>
+              <Ionicons name="calendar-outline" size={13} color={COLORS.accent} />
+              <Text style={styles.programName} numberOfLines={1}>
+                {programUpgrade.programName}
+              </Text>
+            </View>
+
+            {programUpgrade.upgrades.map((u) => (
+              <View key={u.programMovementId} style={styles.programRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.programMovement}>
+                    {u.currentName} <Text style={styles.programArrow}>→</Text> {u.nextMovement.name}
+                  </Text>
+                  {u.nextTargetLabel && <Text style={styles.programTarget}>{u.nextTargetLabel}</Text>}
+                </View>
+                {programUpgrade.editable &&
+                  (upgradingId === u.programMovementId ? (
+                    <ActivityIndicator size="small" color={COLORS.accent} />
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.programButton}
+                      activeOpacity={0.85}
+                      disabled={!!upgradingId}
+                      onPress={() => handleUpgrade(u)}
+                    >
+                      <Text style={styles.programButtonText}>Güncelle</Text>
+                    </TouchableOpacity>
+                  ))}
+              </View>
+            ))}
+
+            {!programUpgrade.editable && (
+              <TouchableOpacity
+                style={styles.programHintRow}
+                activeOpacity={0.7}
+                onPress={() => router.push(`/programs/${programUpgrade.programId}`)}
+              >
+                <Text style={styles.programHint}>
+                  Hazır programlar düzenlenemez. Kendi kopyanı oluşturursan basamağı yükseltebilirsin.
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={COLORS.graphite} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </>
+      )}
+
       {!hasAchievements && (
         <View style={styles.plainBox}>
           <MaterialCommunityIcons name="dumbbell" size={22} color={COLORS.graphite} />
@@ -187,6 +308,38 @@ const styles = StyleSheet.create({
   statNumber: { fontFamily: "BebasNeue_400Regular", fontSize: 24, color: COLORS.paper },
   statLabel: { fontFamily: "Inter_400Regular", fontSize: 11, color: "rgba(250,249,246,0.55)", marginTop: 2 },
   sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 15, color: COLORS.ink, marginTop: 26, marginBottom: 10 },
+  programCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    padding: 14,
+  },
+  programHeaderRow: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 4 },
+  programName: {
+    flex: 1,
+    fontFamily: "Inter_700Bold",
+    fontSize: 12,
+    color: COLORS.accent,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  programRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingTop: 10,
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.line,
+  },
+  programMovement: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.ink },
+  programArrow: { color: COLORS.accent },
+  programTarget: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, marginTop: 2 },
+  programButton: { backgroundColor: COLORS.accent, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
+  programButtonText: { fontFamily: "Inter_700Bold", fontSize: 13, color: COLORS.white },
+  programHintRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 },
+  programHint: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, lineHeight: 17 },
   achievementCard: {
     flexDirection: "row",
     alignItems: "center",

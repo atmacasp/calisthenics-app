@@ -8,6 +8,8 @@ export interface ProgramUpgrade {
   programMovementId: string;
   dayOfWeek: number;
   groupName: string;
+  /** Programda şu anda duran hareketin id değeri — tamamlanan hedeflerle eşleştirmek için */
+  currentMovementId: string;
   currentName: string;
   nextMovement: MovementWithGroupAndPrerequisites;
   /** Yeni basamağın kendi hedefi, okunabilir hâlde */
@@ -79,6 +81,7 @@ export function computeProgramUpgrades(
           programMovementId: pm.id,
           dayOfWeek: day,
           groupName: current.movement_groups?.name ?? "",
+          currentMovementId: current.id,
           currentName: pm.movementName,
           nextMovement: next,
           nextTargetLabel: formatTarget(next),
