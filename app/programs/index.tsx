@@ -108,7 +108,12 @@ export default function ProgramsListScreen() {
                 <View style={styles.metaRow}>
                   {item.level && <Text style={styles.levelBadge}>{LEVEL_LABELS[item.level] ?? item.level}</Text>}
                   {isMine && <Text style={styles.mineBadge}>Senin programın</Text>}
-                  {isActive && <Text style={styles.activeBadge}>✓ Takip ediliyor</Text>}
+                  {isActive ? (
+                    <View style={styles.activeBadge}>
+                      <Feather name="check" size={11} color={COLORS.accent} />
+                      <Text style={styles.activeBadgeText}>Takip ediliyor</Text>
+                    </View>
+                  ) : null}
                 </View>
               </View>
               <Feather name="chevron-right" size={20} color={COLORS.graphite} />
@@ -175,5 +180,6 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 6 },
   levelBadge: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: COLORS.graphite },
   mineBadge: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: COLORS.ink },
-  activeBadge: { fontFamily: "Inter_700Bold", fontSize: 12, color: COLORS.accent },
+  activeBadge: { flexDirection: "row", alignItems: "center", gap: 3 },
+  activeBadgeText: { fontFamily: "Inter_700Bold", fontSize: 12, color: COLORS.accent },
 });

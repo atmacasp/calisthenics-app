@@ -150,7 +150,7 @@ export default function PickMovementScreen() {
                   {!unlocked
                     ? "Ön koşul gerekiyor"
                     : alreadyAdded
-                    ? "✓ Antrenmana eklendi"
+                    ? "Antrenmana eklendi"
                     : `Zorluk: ${item.difficulty_level}/10`}
                 </Text>
               </View>

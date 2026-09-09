@@ -252,4 +252,64 @@ export const programsService = {
       adherencePercent,
     };
   },
+
+  /**
+   * Bir programı (hazır program dahil) kullanıcının kendi programı olarak
+   * kopyalar. Hazır programlar RLS gereği düzenlenemez; kullanıcı bir hazır
+   * programı kendine göre uyarlamak istediğinde önce bu kopyayı alır.
+   * Kopya takip durumunu devralmaz - kullanıcı isterse kendisi başlatır.
+   */
+  async duplicateProgram(userId: string, programId: string): Promise<ProgramRow> {
+    const source = await programsService.getProgramWithDays(programId);
+    if (!source) throw new Error("Program bulunamadı");
+
+    const days: ProgramDraft["days"] = {};
+    Object.entries(source.daysMap).forEach(([day, list]) => {
+      days[Number(day)] = list
+        .filter((pm) => pm.movementId)
+        .map((pm) => ({
+          movementId: pm.movementId as string,
+          targetSets: pm.targetSets,
+          targetReps: pm.targetReps,
+          targetDurationSeconds: pm.targetDurationSeconds,
+          restSeconds: pm.restSeconds,
+        }));
+    });
+
+    return programsService.saveProgram(userId, {
+      name: `${source.name} (kopyam)`,
+      description: source.description,
+      level: source.level as ProgramDraft["level"],
+      days,
+    });
+  },
+
+  /**
+   * Programdaki tek bir satırı bir üst basamağa taşır: hareketi değiştirir ve
+   * hedefi yeni hareketin kendi hedefiyle günceller. rest_seconds, gün ve sıra
+   * korunur - kullanıcının kurduğu düzen bozulmaz.
+   *
+   * RLS sadece kendi programlarında yazmaya izin verir; başkasının/hazır
+   * programda güncelleme hata değil "0 satır" olarak döneceği için sonucu
+   * kontrol edip açık bir mesajla hata fırlatıyoruz.
+   */
+  async upgradeProgramMovement(
+    programMovementId: string,
+    next: { id: string; target_sets: number | null; target_reps: number | null; target_duration_seconds: number | null }
+  ): Promise<void> {
+    const { data, error } = await supabase
+      .from("program_movements")
+      .update({
+        movement_id: next.id,
+        target_sets: next.target_sets,
+        target_reps: next.target_reps,
+        target_duration_seconds: next.target_duration_seconds,
+      })
+      .eq("id", programMovementId)
+      .select("id");
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      throw new Error("Bu program düzenlenemiyor. Önce kendi kopyanı oluştur.");
+    }
+  },
 };

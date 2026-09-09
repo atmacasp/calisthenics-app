@@ -462,10 +462,15 @@ export default function WorkoutSessionScreen() {
                     return (
                       <View key={s.id} style={styles.setLineRow}>
                         <Text style={styles.setLine}>
-                          Set {i + 1}: {s.reps ? `${s.reps} tekrar` : ""} {s.duration_seconds ? `${s.duration_seconds} sn` : ""} {s.added_weight_kg ? `+${s.added_weight_kg}kg` : ""}
+                          Set {i + 1}: {[s.reps ? `${s.reps} tekrar` : null, s.duration_seconds ? `${s.duration_seconds} sn` : null, s.added_weight_kg ? `+${s.added_weight_kg} kg` : null].filter(Boolean).join(" · ")}
                         </Text>
                         <View style={styles.setBadges}>
-                          {metTarget && <Text style={styles.targetMetBadge}>✓ Hedef</Text>}
+                          {metTarget ? (
+                            <View style={styles.targetMetBadge}>
+                              <Feather name="check" size={12} color={COLORS.graphite} />
+                              <Text style={styles.targetMetBadgeText}>Hedef</Text>
+                            </View>
+                          ) : null}
                           {recordHolderIds.has(s.id) && <Text style={styles.prBadge}>🏆 Yeni Rekor!</Text>}
                           <TouchableOpacity hitSlop={8} onPress={() => confirmRemoveSet(s.id, movement.movementId, i + 1)}>
                             <Feather name="x" size={14} color={COLORS.graphite} />
@@ -624,7 +629,8 @@ const styles = StyleSheet.create({
   setLineRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
   setLine: { fontFamily: "Inter_500Medium", fontSize: 14, color: COLORS.ink },
   setBadges: { flexDirection: "row", alignItems: "center", gap: 8 },
-  targetMetBadge: { fontFamily: "Inter_700Bold", fontSize: 11, color: COLORS.graphite },
+  targetMetBadge: { flexDirection: "row", alignItems: "center", gap: 3 },
+  targetMetBadgeText: { fontFamily: "Inter_700Bold", fontSize: 11, color: COLORS.graphite },
   prBadge: { fontFamily: "Inter_700Bold", fontSize: 12, color: COLORS.accent },
   inputRow: { flexDirection: "row", gap: 8, marginTop: 8 },
   smallInput: {

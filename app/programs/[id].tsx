@@ -4,6 +4,10 @@ import { useLocalSearchParams, Stack, useFocusEffect, router } from "expo-router
 import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/authStore";
 import { programsService } from "../../src/services/programs.service";
+import { movementsService } from "../../src/services/movements.service";
+import { progressService } from "../../src/services/progress.service";
+import { computeProgramUpgrades, type ProgramUpgrade } from "../../src/utils/programUpgrades";
+import type { MovementSetLogMap, MovementWithGroupAndPrerequisites } from "../../src/types/movements";
 import type { ProgramMovementWithName, ProgramWithDays, UserProgramRow } from "../../src/types/programs";
 import { COLORS } from "../../src/constants/theme";
 
@@ -31,16 +35,23 @@ export default function ProgramDetailScreen() {
   const [activeProgram, setActiveProgram] = useState<UserProgramRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [movements, setMovements] = useState<MovementWithGroupAndPrerequisites[]>([]);
+  const [setLogMap, setSetLogMap] = useState<MovementSetLogMap>({});
+  const [upgradingId, setUpgradingId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     if (!id) return;
     try {
-      const [detail, active] = await Promise.all([
+      const [detail, active, allMovements, logs] = await Promise.all([
         programsService.getProgramWithDays(id),
         userId ? programsService.getActiveUserProgram(userId) : Promise.resolve(null),
+        movementsService.getAllMovementsWithPrerequisites(),
+        userId ? progressService.getMovementSetLogs(userId) : Promise.resolve({} as MovementSetLogMap),
       ]);
       setProgram(detail);
       setActiveProgram(active);
+      setMovements(allMovements);
+      setSetLogMap(logs);
     } finally {
       setLoading(false);
     }
@@ -79,6 +90,48 @@ export default function ProgramDetailScreen() {
     } finally {
       setUpdating(false);
     }
+  };
+
+  const handleDuplicate = async () => {
+    if (!userId || !program || updating) return;
+    setUpdating(true);
+    try {
+      const copy = await programsService.duplicateProgram(userId, program.id);
+      router.replace(`/programs/${copy.id}`);
+    } catch (error: any) {
+      Alert.alert("Hata", error.message ?? "Program kopyalanamadı");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleUpgrade = (upgrade: ProgramUpgrade) => {
+    Alert.alert(
+      "Basamağı Yükselt",
+      `"${upgrade.currentName}" yerine "${upgrade.nextMovement.name}" gelecek. Gün, sıra ve dinlenme süresi aynı kalır.`,
+      [
+        { text: "Vazgeç", style: "cancel" },
+        {
+          text: "Yükselt",
+          onPress: async () => {
+            setUpgradingId(upgrade.programMovementId);
+            try {
+              await programsService.upgradeProgramMovement(upgrade.programMovementId, {
+                id: upgrade.nextMovement.id,
+                target_sets: upgrade.nextMovement.target_sets,
+                target_reps: upgrade.nextMovement.target_reps,
+                target_duration_seconds: upgrade.nextMovement.target_duration_seconds,
+              });
+              await loadData();
+            } catch (error: any) {
+              Alert.alert("Hata", error.message ?? "Basamak yükseltilemedi");
+            } finally {
+              setUpgradingId(null);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleDelete = () => {
@@ -129,6 +182,10 @@ export default function ProgramDetailScreen() {
     .map(Number)
     .sort((a, b) => a - b);
 
+  // Hedefini tamamladığın hareketler için bir üst basamak önerisi. Hazır
+  // programlarda da hesaplanır - orada aksiyon "kopyala", "yükselt" değil.
+  const upgrades = movements.length ? computeProgramUpgrades(program.daysMap, movements, setLogMap) : [];
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Stack.Screen options={{ headerShown: true, title: program.name }} />
@@ -155,12 +212,12 @@ export default function ProgramDetailScreen() {
           <ActivityIndicator size="small" color={isActive ? COLORS.graphite : COLORS.white} />
         ) : (
           <Text style={[styles.followButtonText, isActive && styles.followButtonTextActive]}>
-            {isActive ? "✓ Takip Ediliyor · Bırak" : "Bu Programı Takip Et"}
+            {isActive ? "Takip Ediliyor · Bırak" : "Bu Programı Takip Et"}
           </Text>
         )}
       </TouchableOpacity>
 
-      {isMine && (
+      {isMine ? (
         <View style={styles.ownerRow}>
           <TouchableOpacity
             style={styles.ownerButton}
@@ -174,6 +231,52 @@ export default function ProgramDetailScreen() {
             <Ionicons name="trash-outline" size={16} color={DANGER} />
             <Text style={[styles.ownerButtonText, { color: DANGER }]}>Sil</Text>
           </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.ownerRow}>
+          <TouchableOpacity style={styles.ownerButton} onPress={handleDuplicate} activeOpacity={0.8} disabled={updating}>
+            <Ionicons name="copy-outline" size={16} color={COLORS.ink} />
+            <Text style={styles.ownerButtonText}>Kopyala ve Düzenle</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {upgrades.length > 0 && (
+        <View style={styles.upgradeCard}>
+          <View style={styles.upgradeHeaderRow}>
+            <Ionicons name="trending-up-outline" size={15} color={COLORS.accent} />
+            <Text style={styles.upgradeTitle}>Basamak Terfisi</Text>
+          </View>
+          <Text style={styles.upgradeSubtitle}>
+            {isMine
+              ? "Bu hareketlerin hedefini tamamladın, bir üst basamağa geçebilirsin."
+              : "Bu hareketlerin hedefini tamamladın. Programı kopyalarsan basamakları yükseltebilirsin."}
+          </Text>
+
+          {upgrades.map((u) => (
+            <View key={u.programMovementId} style={styles.upgradeRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.upgradeDay}>{DAY_NAMES[u.dayOfWeek]}</Text>
+                <Text style={styles.upgradeMovement}>
+                  {u.currentName} <Text style={styles.upgradeArrow}>→</Text> {u.nextMovement.name}
+                </Text>
+                {u.nextTargetLabel && <Text style={styles.upgradeTarget}>{u.nextTargetLabel}</Text>}
+              </View>
+              {isMine &&
+                (upgradingId === u.programMovementId ? (
+                  <ActivityIndicator size="small" color={COLORS.accent} />
+                ) : (
+                  <TouchableOpacity
+                    style={styles.upgradeButton}
+                    activeOpacity={0.8}
+                    disabled={!!upgradingId}
+                    onPress={() => handleUpgrade(u)}
+                  >
+                    <Text style={styles.upgradeButtonText}>Yükselt</Text>
+                  </TouchableOpacity>
+                ))}
+            </View>
+          ))}
         </View>
       )}
 
@@ -239,6 +342,56 @@ const styles = StyleSheet.create({
     borderColor: COLORS.line,
   },
   ownerButtonText: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.ink },
+  upgradeCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 18,
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.25)",
+  },
+  upgradeHeaderRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  upgradeTitle: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 12,
+    color: COLORS.accent,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  upgradeSubtitle: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    color: COLORS.graphite,
+    marginTop: 6,
+    marginBottom: 12,
+    lineHeight: 19,
+  },
+  upgradeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.line,
+    marginTop: 10,
+  },
+  upgradeDay: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 11,
+    color: COLORS.graphite,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  upgradeMovement: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.ink, marginTop: 2 },
+  upgradeArrow: { color: COLORS.accent },
+  upgradeTarget: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, marginTop: 2 },
+  upgradeButton: {
+    backgroundColor: COLORS.accent,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  upgradeButtonText: { fontFamily: "Inter_700Bold", fontSize: 13, color: COLORS.white },
   dayCard: {
     backgroundColor: COLORS.white,
     borderRadius: 14,
