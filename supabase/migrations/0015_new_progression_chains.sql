@@ -18,10 +18,10 @@
 -- hareket (Squat) eklendiği için, o kategorinin "Sırada Bu Var" önerisi tüm
 -- eskileri tamamlamış bir kullanıcıda Squat'a kayar - bu istenen davranış.
 
--- Tamamı tek işlemde: yarım uygulanmış bir zincir (hareketleri var, ön koşulları
--- yok) kilit motorunu yanıltır. Yanlışlıkla ikinci kez çalıştırılırsa slug'ın
--- unique kısıtı hemen patlar ve hiçbir şey yazılmadan geri alınır.
-begin;
+-- Transaction'ı bilerek AÇMIYORUZ: scripts/migrate.sh her dosyayı zaten tek
+-- transaction'da çalıştırıyor (--single-transaction). Dosyanın kendi begin/commit'i
+-- olduğunda, biri eksik yapıştırılırsa her şey sessizce geri alınıyor - bir kez
+-- başımıza geldi.
 
 -- ------------------------------------------------------------ YENİ KATEGORİLER
 insert into public.movement_groups (slug, name, description, order_index) values
@@ -248,5 +248,3 @@ update public.movements set
     $$İki bacağı farklı sayıda çalışmak; her seti iki tarafa da uygula.$$
   ]
 where name='Bulgar Split Squat' and group_id=(select id from movement_groups where slug='pistol-squat');
-
-commit;
