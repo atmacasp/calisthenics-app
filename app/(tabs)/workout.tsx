@@ -12,7 +12,12 @@ import { ActiveSessionBanner } from "../../src/components/ActiveSessionBanner";
 import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 import type { MovementSetLogMap, MovementWithGroupAndPrerequisites } from "../../src/types/movements";
 import { formatTarget, type TargetProgress } from "../../src/utils/targetProgress";
-import { computeFocusSuggestions, summarizeSteps, type FocusSuggestion } from "../../src/utils/workoutSuggestions";
+import {
+  computeFocusSuggestions,
+  orderSuggestions,
+  summarizeSteps,
+  type FocusSuggestion,
+} from "../../src/utils/workoutSuggestions";
 
 /** Hedefe kalan mesafeyi kart içinde gösteren ince çubuk. */
 function TargetProgressBar({ progress }: { progress: TargetProgress }) {
@@ -72,6 +77,9 @@ export default function WorkoutScreen() {
   // Tüm kategorilerin toplam basamak sayacı: "sırada ne var" listesinin üstünde
   // kullanıcının zincirlerde nerede olduğunu tek satırda özetler.
   const stepSummary = summarizeSteps(suggestions);
+  // Çalışılabilir kartlar üstte; 11 kategoriyle kilitli kartların arasında
+  // kaybolmasınlar.
+  const orderedSuggestions = orderSuggestions(suggestions);
 
   const handleFreeStart = () => router.push("/workout/start");
 
@@ -192,7 +200,7 @@ export default function WorkoutScreen() {
       )}
 
       {!loading &&
-        suggestions.map((s) => {
+        orderedSuggestions.map((s) => {
           const isStarting = startingId === s.movement.id;
           return (
             <TouchableOpacity

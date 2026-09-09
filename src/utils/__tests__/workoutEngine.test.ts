@@ -1,6 +1,6 @@
 /// <reference types="jest" />
 import type { MovementSetLogMap, MovementWithGroupAndPrerequisites } from "../../types/movements";
-import { computeFocusSuggestions, summarizeSteps } from "../workoutSuggestions";
+import { computeFocusSuggestions, orderSuggestions, summarizeSteps } from "../workoutSuggestions";
 import { computeWorkoutAchievements } from "../workoutSummary";
 
 function movement(over: Partial<MovementWithGroupAndPrerequisites> & { id: string; name: string }) {
@@ -90,6 +90,42 @@ describe("computeFocusSuggestions", () => {
     const summary = summarizeSteps(computeFocusSuggestions(twoGroups, { a: met }));
     expect(summary.total).toBe(4);
     expect(summary.completed).toBe(1);
+  });
+});
+
+describe("orderSuggestions", () => {
+  const inGroup = (id: string, groupName: string) =>
+    movement({ id, name: id, group_id: `g-${id}`, movement_groups: { name: groupName, order_index: 0 } });
+
+  // Üç kategori: biri tamamlanmış, biri kilitli, biri çalışılabilir.
+  const movements = [
+    inGroup("bitmis", "Bitmiş"),
+    movement({
+      id: "kilitli",
+      name: "kilitli",
+      group_id: "g-kilitli",
+      movement_groups: { name: "Kilitli", order_index: 0 },
+      prerequisites: prerequisiteOn("sinav", "Standart Şınav"),
+    }),
+    inGroup("acik", "Açık"),
+  ];
+
+  it("çalışılabilir, kilitli, tamamlanmış sırasına dizer", () => {
+    const ordered = orderSuggestions(computeFocusSuggestions(movements, { bitmis: met }));
+    expect(ordered.map((s) => s.groupName)).toEqual(["Açık", "Kilitli", "Bitmiş"]);
+  });
+
+  it("aynı gruptaki kartların veritabanı sırasını bozmaz", () => {
+    const twoOpen = [inGroup("bir", "Bir"), inGroup("iki", "İki")];
+    const ordered = orderSuggestions(computeFocusSuggestions(twoOpen, {}));
+    expect(ordered.map((s) => s.groupName)).toEqual(["Bir", "İki"]);
+  });
+
+  it("girdiyi yerinde değiştirmez", () => {
+    const original = computeFocusSuggestions(movements, { bitmis: met });
+    const before = original.map((s) => s.groupName);
+    orderSuggestions(original);
+    expect(original.map((s) => s.groupName)).toEqual(before);
   });
 });
 

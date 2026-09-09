@@ -47,6 +47,25 @@ export interface FocusSuggestion {
   blockingPrerequisite: BlockingPrerequisite | null;
 }
 
+/**
+ * Kart sırası: bugün çalışılabilecekler önce, sonra kilitliler, en sonda
+ * tamamlanmış kategoriler.
+ *
+ * computeFocusSuggestions bilinçli olarak veritabanı sırasını (movement_groups.
+ * order_index) koruyor - hesap ile sunum ayrı kalsın diye sıralama burada ayrı
+ * bir fonksiyon. Kategori sayısı arttıkça (artık 11 zincir) listenin başında
+ * aksiyon alınabilir kartların durması gerekiyor; kilitli kart bilgi verir,
+ * iş vermez. Aynı kova içindeki kartlar kendi aralarında veritabanı sırasını
+ * korur, böylece liste her açılışta aynı görünür.
+ */
+export function orderSuggestions(suggestions: FocusSuggestion[]): FocusSuggestion[] {
+  const rank = (s: FocusSuggestion) => (s.completed ? 2 : s.locked ? 1 : 0);
+  return suggestions
+    .map((suggestion, index) => ({ suggestion, index }))
+    .sort((a, b) => rank(a.suggestion) - rank(b.suggestion) || a.index - b.index)
+    .map((entry) => entry.suggestion);
+}
+
 /** Tüm kategoriler toplamında kaç basamak açıldığı. */
 export interface StepSummary {
   completed: number;
