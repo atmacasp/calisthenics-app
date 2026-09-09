@@ -7,6 +7,8 @@ import { useThemeStore } from "../../src/store/themeStore";
 import { profileService, type ProfileUpdate } from "../../src/services/profile.service";
 import { authService } from "../../src/services/auth.service";
 import { notificationsService, describeReminders } from "../../src/services/notifications.service";
+import { avatarService } from "../../src/services/avatar.service";
+import { Avatar } from "../../src/components/Avatar";
 import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 
 const LEVEL_LABELS: Record<string, string> = {
@@ -31,6 +33,8 @@ export default function ProfileScreen() {
   const [reminderHour, setReminderHour] = useState(18);
   const [reminderStatus, setReminderStatus] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
 
   useEffect(() => {
     if (!session) return;
@@ -41,6 +45,7 @@ export default function ProfileScreen() {
         setUnit(data.unit_preference ?? "metric");
         setNotifications(data.notifications_enabled ?? true);
         setReminderHour(data.reminder_hour ?? 18);
+        setAvatarUrl(data.avatar_url ?? null);
       })
       .catch((error: any) => Alert.alert("Hata", error.message ?? "Profil yüklenemedi"))
       .finally(() => setLoading(false));
@@ -106,6 +111,48 @@ export default function ProfileScreen() {
     persist({ theme: value });
   };
 
+  const handlePickAvatar = async () => {
+    if (!session) return;
+    setAvatarBusy(true);
+    try {
+      const picked = await avatarService.pickFromLibrary();
+      if (!picked) return; // vazgeçti
+      const url = await avatarService.upload(session.user.id, picked);
+      setAvatarUrl(url);
+    } catch (error: any) {
+      Alert.alert("Fotoğraf yüklenemedi", error.message ?? "Bilinmeyen bir hata oldu");
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!session) return;
+    setAvatarBusy(true);
+    try {
+      await avatarService.remove(session.user.id);
+      setAvatarUrl(null);
+    } catch (error: any) {
+      Alert.alert("Fotoğraf kaldırılamadı", error.message ?? "Bilinmeyen bir hata oldu");
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+
+  /** Fotoğraf varsa değiştir/kaldır sorulur, yoksa doğrudan galeri açılır. */
+  const handleAvatarPress = () => {
+    if (avatarBusy) return;
+    if (!avatarUrl) {
+      handlePickAvatar();
+      return;
+    }
+    Alert.alert("Profil Fotoğrafı", undefined, [
+      { text: "Değiştir", onPress: handlePickAvatar },
+      { text: "Kaldır", style: "destructive", onPress: handleRemoveAvatar },
+      { text: "Vazgeç", style: "cancel" },
+    ]);
+  };
+
   const handleSignOut = async () => {
     try {
       await notificationsService.cancelAll();
@@ -156,9 +203,21 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.identityCard}>
-        <View style={styles.avatarCircle}>
-          <Text style={styles.avatarLetter}>{(profile?.full_name?.[0] ?? "?").toUpperCase()}</Text>
-        </View>
+        <TouchableOpacity
+          onPress={handleAvatarPress}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={avatarUrl ? "Profil fotoğrafını değiştir veya kaldır" : "Profil fotoğrafı ekle"}
+        >
+          <Avatar uri={avatarUrl} name={profile?.full_name} size={56} />
+          <View style={styles.avatarBadge}>
+            {avatarBusy ? (
+              <ActivityIndicator size="small" color={COLORS.onAccent} />
+            ) : (
+              <Ionicons name="camera" size={12} color={COLORS.onAccent} />
+            )}
+          </View>
+        </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: 14 }}>
           <Text style={styles.identityName} numberOfLines={1}>
             {profile?.full_name ?? "İsimsiz"}
@@ -289,17 +348,19 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
     borderWidth: 1,
     borderColor: COLORS.line,
   },
-  avatarCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "rgba(34,197,94,0.12)",
+  avatarBadge: {
+    position: "absolute",
+    right: -2,
+    bottom: -2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: COLORS.accent,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(34,197,94,0.25)",
+    borderWidth: 2,
+    borderColor: COLORS.surface,
   },
-  avatarLetter: { fontFamily: "Inter_700Bold", fontSize: 22, color: COLORS.accent },
   identityName: { fontFamily: "Inter_700Bold", fontSize: 18, color: COLORS.ink },
   identityEmail: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, marginTop: 2 },
   levelChip: {

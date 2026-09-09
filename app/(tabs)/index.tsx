@@ -7,6 +7,7 @@ import { profileService } from "../../src/services/profile.service";
 import { progressService } from "../../src/services/progress.service";
 import { useProgramDay } from "../../src/hooks/useProgramDay";
 import { ActiveSessionBanner } from "../../src/components/ActiveSessionBanner";
+import { Avatar } from "../../src/components/Avatar";
 import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -176,8 +177,8 @@ export default function HomeScreen() {
         </TouchableOpacity>
       )}
       <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.avatarCircle} onPress={() => router.push("/(tabs)/profile")}>
-          <Text style={styles.avatarLetter}>{(profile?.full_name?.[0] ?? "?").toUpperCase()}</Text>
+        <TouchableOpacity onPress={() => router.push("/(tabs)/profile")} activeOpacity={0.8}>
+          <Avatar uri={profile?.avatar_url} name={profile?.full_name} size={44} />
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={styles.greetingSmall}>{getGreeting()},</Text>
@@ -381,8 +382,6 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
   errorBanner: { backgroundColor: "#fee2e2", margin: 20, marginBottom: 0, padding: 12, borderRadius: 10 },
   errorBannerText: { color: COLORS.warn, fontFamily: "Inter_500Medium", fontSize: 12, textAlign: "center" },
   headerRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingTop: 16, gap: 10 },
-  avatarCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(34,197,94,0.12)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(34,197,94,0.25)" },
-  avatarLetter: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.accent },
   greetingSmall: { fontFamily: "Inter_400Regular", fontSize: 13, color: COLORS.graphite },
   greetingName: { fontFamily: "Inter_700Bold", fontSize: 17, color: COLORS.ink, marginTop: 1 },
   iconPill: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.line, alignItems: "center", justifyContent: "center" },

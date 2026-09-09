@@ -17,6 +17,7 @@ export interface Database {
         Row: {
           id: string;
           full_name: string | null;
+          avatar_url: string | null;
           height_cm: number | null;
           weight_kg: number | null;
           unit_preference: "metric" | "imperial";
@@ -35,6 +36,7 @@ export interface Database {
         Insert: {
           id: string;
           full_name?: string | null;
+          avatar_url?: string | null;
           height_cm?: number | null;
           weight_kg?: number | null;
           unit_preference?: "metric" | "imperial";

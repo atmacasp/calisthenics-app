@@ -25,7 +25,13 @@
     "plugins": [
       "expo-font",
       "expo-splash-screen",
-      "expo-router"
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Profil fotoğrafını seçebilmen için galerine erişmesi gerekiyor."
+        }
+      ]
     ]
   }
 }
