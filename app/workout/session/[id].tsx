@@ -1,5 +1,5 @@
 
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, Vibration } from "react-native";
 import { useEffect, useState, useRef } from "react";
 import { router, useLocalSearchParams, Stack } from "expo-router";
 import { Feather } from "@expo/vector-icons";
@@ -112,6 +112,8 @@ export default function WorkoutSessionScreen() {
   // antrenmandaki setleri.
   const [previousPerformance, setPreviousPerformance] = useState<Record<string, PreviousPerformance>>({});
   const intervalRef = useRef<any>(null);
+  // Sayaç kendiliğinden mi bitti, kullanıcı mı atladı - titreşim için ayırt ediliyor.
+  const restWasRunning = useRef(false);
 
   useEffect(() => {
     if (restLeft <= 0) {
@@ -121,6 +123,24 @@ export default function WorkoutSessionScreen() {
     intervalRef.current = setInterval(() => setRestLeft((s) => s - 1), 1000);
     return () => clearInterval(intervalRef.current);
   }, [restLeft > 0]);
+
+  // Dinlenme dolduğunda titret: telefon yerdeyken sessiz bir sayacın faydası yok.
+  // "Atla" ile kesildiğinde titretmiyoruz - kullanıcı zaten kasten bitirdi.
+  useEffect(() => {
+    if (restLeft > 0) {
+      restWasRunning.current = true;
+      return;
+    }
+    if (restWasRunning.current) {
+      restWasRunning.current = false;
+      Vibration.vibrate([0, 300, 150, 300]);
+    }
+  }, [restLeft]);
+
+  const skipRest = () => {
+    restWasRunning.current = false;
+    setRestLeft(0);
+  };
 
   useEffect(() => {
     if (!authSession) return;
@@ -241,9 +261,14 @@ export default function WorkoutSessionScreen() {
       {restLeft > 0 && (
         <View style={styles.restBanner}>
           <Text style={styles.restText}>Dinlenme: {restLeft}s</Text>
-          <TouchableOpacity onPress={() => setRestLeft(0)}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 18 }}>
+            <TouchableOpacity onPress={() => setRestLeft((s) => s + 30)} hitSlop={8}>
+              <Text style={styles.skipText}>+30 sn</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={skipRest} hitSlop={8}>
             <Text style={styles.skipText}>Atla</Text>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
