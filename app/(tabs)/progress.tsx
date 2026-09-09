@@ -6,6 +6,7 @@ import { useAuthStore } from "../../src/store/authStore";
 import { profileService } from "../../src/services/profile.service";
 import { progressService } from "../../src/services/progress.service";
 import { bodyWeightService } from "../../src/services/bodyweight.service";
+import { useWeightLog } from "../../src/hooks/useWeightLog";
 import { programsService } from "../../src/services/programs.service";
 import { COLORS } from "../../src/constants/theme";
 import type { ProgramAdherence } from "../../src/types/programs";
@@ -84,6 +85,8 @@ export default function ProgressScreen() {
       loadData();
     }, [loadData])
   );
+
+  const { confirmRemoveWeight } = useWeightLog();
 
   const handleAddWeight = async () => {
     if (!session || !newWeight) return;
@@ -301,6 +304,17 @@ export default function ProgressScreen() {
 
           {weights.length > 0 ? (
             <>
+              <TouchableOpacity
+                style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.line, borderRadius: 12, padding: 12, marginBottom: 12 }}
+                activeOpacity={0.7}
+                onPress={() => confirmRemoveWeight(weightLogs[weightLogs.length - 1], loadData)}
+              >
+                <Text style={{ fontFamily: "Inter_400Regular", fontSize: 13, color: COLORS.graphite }}>
+                  Son kayıt: {lastWeight} kg · {weightLogs[weightLogs.length - 1]?.logged_at}
+                </Text>
+                <Ionicons name="close" size={16} color={WARN} />
+              </TouchableOpacity>
+
               <View style={styles.weightSummaryRow}>
                 <View style={styles.weightSummaryBox}>
                   <Text style={styles.weightSummaryNumber}>{lastWeight}</Text>

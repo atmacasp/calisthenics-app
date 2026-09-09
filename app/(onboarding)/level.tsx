@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { useOnboardingStore } from "../../src/store/onboardingStore";
 import { useAuthStore } from "../../src/store/authStore";
 import { profileService } from "../../src/services/profile.service";
+import { bodyWeightService } from "../../src/services/bodyweight.service";
 
 export default function LevelScreen() {
   const [level, setLevel] = useState<"beginner" | "intermediate" | "advanced" | null>(null);
@@ -23,6 +24,12 @@ export default function LevelScreen() {
         level,
         onboarding_completed: true,
       });
+      // Girilen kilo ilk vücut ağırlığı kaydı olsun; aksi halde İlerleme > Vücut
+      // sekmesi, uygulama kiloyu bildiği hâlde boş açılıyordu. Başarısız olursa
+      // onboarding tamamlanmayı engellemesin.
+      if (onboardingData.weight_kg) {
+        await bodyWeightService.addLog(session.user.id, onboardingData.weight_kg).catch(() => {});
+      }
       router.replace("/(tabs)");
     } catch (error: any) {
       Alert.alert("Hata", error.message ?? "Bir hata oluştu");
