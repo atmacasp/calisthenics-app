@@ -30,7 +30,6 @@ export default function ProfileScreen() {
   const [notifications, setNotifications] = useState(true);
   const [reminderHour, setReminderHour] = useState(18);
   const [reminderStatus, setReminderStatus] = useState<string>("");
-  const [language, setLanguage] = useState<"tr" | "en">("tr");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -42,7 +41,6 @@ export default function ProfileScreen() {
         setUnit(data.unit_preference ?? "metric");
         setNotifications(data.notifications_enabled ?? true);
         setReminderHour(data.reminder_hour ?? 18);
-        setLanguage((data.language as "tr" | "en") ?? "tr");
       })
       .catch((error: any) => Alert.alert("Hata", error.message ?? "Profil yüklenemedi"))
       .finally(() => setLoading(false));
@@ -106,11 +104,6 @@ export default function ProfileScreen() {
   const handleThemeChange = (value: "system" | "light" | "dark") => {
     setThemePreference(value);
     persist({ theme: value });
-  };
-
-  const handleLanguageChange = (value: "tr" | "en") => {
-    setLanguage(value);
-    persist({ language: value });
   };
 
   const handleSignOut = async () => {
@@ -267,24 +260,6 @@ export default function ProfileScreen() {
         ))}
       </View>
       <Text style={styles.helperText}>Sistem seçiliyken telefonunun görünüm ayarını izler.</Text>
-
-      <Text style={styles.sectionTitle}>Dil</Text>
-      <View style={styles.rowButtons}>
-        <TouchableOpacity
-          style={[styles.optionButton, language === "tr" && styles.optionActive]}
-          onPress={() => handleLanguageChange("tr")}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.optionText, language === "tr" && styles.optionTextActive]}>Türkçe</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.optionButton, language === "en" && styles.optionActive]}
-          onPress={() => handleLanguageChange("en")}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.optionText, language === "en" && styles.optionTextActive]}>English</Text>
-        </TouchableOpacity>
-      </View>
 
       <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.8}>
         <Ionicons name="log-out-outline" size={18} color={COLORS.ink} />

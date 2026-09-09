@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, ScrollView, FlatList, Dimensions, StyleSheet, Alert, ActivityIndicator } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, FlatList, Dimensions, StyleSheet, ActivityIndicator } from "react-native";
 import { useEffect, useState, useCallback } from "react";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -164,6 +164,10 @@ export default function HomeScreen() {
       : []),
   ];
 
+  // Zil artık yer tutucu değil: hatırlatıcı kapalıysa uyarı noktasıyla birlikte
+  // ayarına götürüyor, açıksa sadece kısayol.
+  const remindersOff = profile ? profile.notifications_enabled === false : false;
+
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
       {loadError && (
@@ -183,10 +187,16 @@ export default function HomeScreen() {
         </View>
         <TouchableOpacity
           style={styles.iconPill}
-          onPress={() => Alert.alert("Bildirimler", "Bildirim merkezi yakında burada olacak.")}
+          onPress={() => router.push("/(tabs)/profile")}
+          accessibilityRole="button"
+          accessibilityLabel={remindersOff ? "Hatırlatıcı kapalı, ayarlara git" : "Hatırlatıcı ayarları"}
         >
-          <Ionicons name="notifications-outline" size={18} color={COLORS.ink} />
-          <View style={styles.notifDot} />
+          <Ionicons
+            name={remindersOff ? "notifications-off-outline" : "notifications-outline"}
+            size={18}
+            color={COLORS.ink}
+          />
+          {remindersOff && <View style={styles.notifDot} />}
         </TouchableOpacity>
         <View style={styles.streakPill}>
           <Ionicons name="flame" size={15} color={COLORS.accent} />
@@ -376,7 +386,7 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
   greetingSmall: { fontFamily: "Inter_400Regular", fontSize: 13, color: COLORS.graphite },
   greetingName: { fontFamily: "Inter_700Bold", fontSize: 17, color: COLORS.ink, marginTop: 1 },
   iconPill: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.line, alignItems: "center", justifyContent: "center" },
-  notifDot: { position: "absolute", top: 9, right: 10, width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.accent },
+  notifDot: { position: "absolute", top: 9, right: 10, width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.warn },
   streakPill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.line, borderRadius: 20, paddingHorizontal: 12, height: 40 },
   streakPillText: { fontFamily: "Inter_700Bold", fontSize: 13, color: COLORS.ink },
   heroPanel: { flexDirection: "row", backgroundColor: COLORS.inverse, borderRadius: 24, marginHorizontal: 20, marginTop: 18, padding: 20 },

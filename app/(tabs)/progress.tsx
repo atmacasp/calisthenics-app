@@ -1,6 +1,6 @@
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, StyleSheet, ActivityIndicator } from "react-native";
 import { useEffect, useState, useCallback } from "react";
-import { useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/authStore";
 import { profileService } from "../../src/services/profile.service";
@@ -8,6 +8,7 @@ import { progressService } from "../../src/services/progress.service";
 import { bodyWeightService } from "../../src/services/bodyweight.service";
 import { useWeightLog } from "../../src/hooks/useWeightLog";
 import { programsService } from "../../src/services/programs.service";
+import { EmptyState } from "../../src/components/EmptyState";
 import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 import type { ProgramAdherence } from "../../src/types/programs";
 
@@ -111,6 +112,11 @@ export default function ProgressScreen() {
     );
   }
 
+  // Tek eşik: hiç set kaydı yoksa tüm sekmeler sıfır grafik çizer, onun yerine
+  // ne olacağını anlatan boş durum gösteriliyor. Vücut sekmesi ayrı - kilo
+  // kaydı antrenmandan bağımsız.
+  const hasWorkouts = stats.totalSets > 0;
+
   const maxWeekly = Math.max(...weeklyVolume.map((w) => w.totalSets), 1);
   const avgWeekly = weeklyVolume.length ? Math.round(weeklyVolume.reduce((s, w) => s + w.totalSets, 0) / weeklyVolume.length) : 0;
   const bestWeek = weeklyVolume.reduce((best, w) => (w.totalSets > (best?.totalSets ?? -1) ? w : best), null as any);
@@ -142,7 +148,17 @@ export default function ProgressScreen() {
         ))}
       </ScrollView>
 
-      {segment === "genel" && (
+      {segment === "genel" && !hasWorkouts && (
+        <EmptyState
+          icon="rocket-outline"
+          title="İlerlemen burada birikecek"
+          description="İlk antrenmanını kaydettiğinde serin, toplam istatistiklerin ve aktivite haritan bu ekranda görünmeye başlar."
+          actionLabel="İlk antrenmanını başlat"
+          onAction={() => router.push("/(tabs)/workout")}
+        />
+      )}
+
+      {segment === "genel" && hasWorkouts && (
         <>
           {adherence && (
             <View style={styles.adherenceCard}>
@@ -216,7 +232,17 @@ export default function ProgressScreen() {
         </>
       )}
 
-      {segment === "hacim" && (
+      {segment === "hacim" && !hasWorkouts && (
+        <EmptyState
+          icon="bar-chart-outline"
+          title="Henüz ölçecek hacim yok"
+          description="Haftalık set hacmin ve trendin, antrenman kaydetmeye başladığın andan itibaren burada çizilir."
+          actionLabel="Antrenmana başla"
+          onAction={() => router.push("/(tabs)/workout")}
+        />
+      )}
+
+      {segment === "hacim" && hasWorkouts && (
         <>
           <View style={styles.volumeSummaryRow}>
             <View style={styles.volumeSummaryBox}>
@@ -248,7 +274,17 @@ export default function ProgressScreen() {
         </>
       )}
 
-      {segment === "kategoriler" && (
+      {segment === "kategoriler" && !hasWorkouts && (
+        <EmptyState
+          icon="layers-outline"
+          title="Hangi zincirde ilerlediğin burada"
+          description="Sekiz kategorideki dağılımın ve hareket bazlı rekorların, ilk setini kaydettiğinde oluşmaya başlar."
+          actionLabel="Hareket kütüphanesine bak"
+          onAction={() => router.push("/(tabs)/library")}
+        />
+      )}
+
+      {segment === "kategoriler" && hasWorkouts && (
         <>
           <Text style={styles.sectionTitle}>Kategori Dağılımı</Text>
           {categories.map((c) => (
@@ -349,7 +385,11 @@ export default function ProgressScreen() {
               </View>
             </>
           ) : (
-            <Text style={styles.emptyText}>Henüz kilo kaydı yok.</Text>
+            <EmptyState
+              icon="body-outline"
+              title="Kilo grafiğin henüz boş"
+              description="Yukarıdan bugünkü kilonu gir; ikinci kayıttan sonra değişim ve min–maks aralığı da burada görünür."
+            />
           )}
         </>
       )}
