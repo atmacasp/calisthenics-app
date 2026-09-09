@@ -13,6 +13,8 @@ import { COLORS } from "../../src/constants/theme";
 import type { MovementWithPrerequisites, MovementSetLogMap } from "../../src/types/movements";
 import { areAllPrerequisitesMet, computeTargetProgress, formatTarget, getPrerequisiteTarget, isPrerequisiteMet } from "../../src/utils/targetProgress";
 
+const WARN = "#dc2626";
+
 export default function MovementDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const userId = useAuthStore((s) => s.session?.user.id);
@@ -92,13 +94,12 @@ export default function MovementDetailScreen() {
   return (
     <ScrollView style={styles.container}>
       <Stack.Screen options={{ headerShown: true, title: movement.name }} />
-      <View style={styles.imagePlaceholder}>
-        {movement.gif_url ? (
+      {/* Görsel yoksa boş gri kutu çizmiyoruz - "yakında" vaadi yerine hiç yer kaplamasın. */}
+      {movement.gif_url ? (
+        <View style={styles.imageBox}>
           <Image source={{ uri: movement.gif_url }} style={styles.image} />
-        ) : (
-          <Text style={styles.placeholderText}>Görsel/GIF yakında eklenecek</Text>
-        )}
-      </View>
+        </View>
+      ) : null}
       <View style={styles.content}>
         <Text style={styles.category}>{movement.movement_groups?.name}</Text>
         <Text style={styles.title}>{movement.name}</Text>
@@ -106,6 +107,44 @@ export default function MovementDetailScreen() {
           <Text style={styles.difficultyText}>Zorluk: {movement.difficulty_level}/10</Text>
         </View>
         <Text style={styles.description}>{movement.description}</Text>
+
+        {movement.how_to?.length ? (
+          <View style={styles.guideSection}>
+            <Text style={styles.guideTitle}>Nasıl Yapılır</Text>
+            {movement.how_to.map((step, i) => (
+              <View key={i} style={styles.stepRow}>
+                <View style={styles.stepNumberCircle}>
+                  <Text style={styles.stepNumber}>{i + 1}</Text>
+                </View>
+                <Text style={styles.stepText}>{step}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {movement.cues?.length ? (
+          <View style={styles.guideSection}>
+            <Text style={styles.guideTitle}>İpuçları</Text>
+            {movement.cues.map((cue, i) => (
+              <View key={i} style={styles.bulletRow}>
+                <Feather name="check" size={14} color={COLORS.accent} style={styles.bulletIcon} />
+                <Text style={styles.bulletText}>{cue}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {movement.mistakes?.length ? (
+          <View style={styles.guideSection}>
+            <Text style={styles.guideTitle}>Sık Yapılan Hatalar</Text>
+            {movement.mistakes.map((mistake, i) => (
+              <View key={i} style={styles.bulletRow}>
+                <Feather name="x" size={14} color={WARN} style={styles.bulletIcon} />
+                <Text style={styles.bulletText}>{mistake}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         {targetText && (
           <View style={styles.targetCard}>
@@ -222,14 +261,25 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.paper },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.paper },
   notFoundText: { fontFamily: "Inter_400Regular", fontSize: 15, color: COLORS.graphite },
-  imagePlaceholder: {
-    height: 220,
-    backgroundColor: COLORS.line,
+  imageBox: { height: 220, backgroundColor: COLORS.line },
+  image: { width: "100%", height: "100%" },
+  guideSection: { marginTop: 24 },
+  guideTitle: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.ink, marginBottom: 12 },
+  stepRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 10 },
+  stepNumberCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "rgba(34,197,94,0.12)",
     alignItems: "center",
     justifyContent: "center",
+    marginTop: 1,
   },
-  image: { width: "100%", height: "100%" },
-  placeholderText: { fontFamily: "Inter_400Regular", color: COLORS.graphite },
+  stepNumber: { fontFamily: "Inter_700Bold", fontSize: 12, color: COLORS.accent },
+  stepText: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 14, color: COLORS.ink, lineHeight: 21 },
+  bulletRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 8 },
+  bulletIcon: { marginTop: 3 },
+  bulletText: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 14, color: COLORS.graphite, lineHeight: 21 },
   content: { padding: 22 },
   historySection: { paddingHorizontal: 22, paddingBottom: 36 },
   historyTitle: { fontFamily: "Inter_700Bold", fontSize: 17, color: COLORS.ink },

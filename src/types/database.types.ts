@@ -90,6 +90,9 @@ export interface Database {
           target_reps: number | null;
           target_duration_seconds: number | null;
           target_note: string | null;
+          how_to: string[] | null;
+          cues: string[] | null;
+          mistakes: string[] | null;
         };
         Insert: {
           id?: string;
@@ -107,6 +110,9 @@ export interface Database {
           target_reps?: number | null;
           target_duration_seconds?: number | null;
           target_note?: string | null;
+          how_to?: string[] | null;
+          cues?: string[] | null;
+          mistakes?: string[] | null;
         };
         Update: Partial<Database["public"]["Tables"]["movements"]["Insert"]>;
         Relationships: [
