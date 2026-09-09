@@ -45,6 +45,7 @@ export default function ProgramDetailScreen() {
   const [upgradingId, setUpgradingId] = useState<string | null>(null);
   // Bu haftanin tamamlanan program gunleri: { gun: sessionId }
   const [weekDone, setWeekDone] = useState<Record<number, string>>({});
+  const [addingId, setAddingId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -136,6 +137,37 @@ export default function ProgramDetailScreen() {
               Alert.alert("Hata", error.message ?? "Basamak yükseltilemedi");
             } finally {
               setUpgradingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleAdd = (addition: ProgramAddition) => {
+    if (!program) return;
+    Alert.alert(
+      "Programa Ekle",
+      `"${addition.movement.name}" ${DAY_NAMES[addition.dayOfWeek]} gününe eklenecek.` +
+        (addition.targetLabel ? ` Hedefi: ${addition.targetLabel}` : ""),
+      [
+        { text: "Vazgeç", style: "cancel" },
+        {
+          text: "Ekle",
+          onPress: async () => {
+            setAddingId(addition.movement.id);
+            try {
+              await programsService.addMovementToProgram(program.id, addition.dayOfWeek, {
+                id: addition.movement.id,
+                target_sets: addition.movement.target_sets,
+                target_reps: addition.movement.target_reps,
+                target_duration_seconds: addition.movement.target_duration_seconds,
+              });
+              await loadData();
+            } catch (error: any) {
+              Alert.alert("Hata", error.message ?? "Hareket eklenemedi");
+            } finally {
+              setAddingId(null);
             }
           },
         },
@@ -287,6 +319,45 @@ export default function ProgramDetailScreen() {
                     onPress={() => handleUpgrade(u)}
                   >
                     <Text style={styles.upgradeButtonText}>Yükselt</Text>
+                  </TouchableOpacity>
+                ))}
+            </View>
+          ))}
+        </View>
+      )}
+
+      {additions.length > 0 && (
+        <View style={styles.upgradeCard}>
+          <View style={styles.upgradeHeaderRow}>
+            <Ionicons name="add-circle-outline" size={15} color={COLORS.accent} />
+            <Text style={styles.upgradeTitle}>Programına Ekle</Text>
+          </View>
+          <Text style={styles.upgradeSubtitle}>
+            {isMine
+              ? "Ön koşullarını karşıladığın, henüz programında olmayan basamaklar."
+              : "Bu basamakların kilidi açık. Programı kopyalarsan ekleyebilirsin."}
+          </Text>
+
+          {additions.map((a) => (
+            <View key={a.movement.id} style={styles.upgradeRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.upgradeDay}>
+                  {a.groupName} · {DAY_NAMES[a.dayOfWeek]}
+                </Text>
+                <Text style={styles.upgradeMovement}>{a.movement.name}</Text>
+                {a.targetLabel && <Text style={styles.upgradeTarget}>{a.targetLabel}</Text>}
+              </View>
+              {isMine &&
+                (addingId === a.movement.id ? (
+                  <ActivityIndicator size="small" color={COLORS.accent} />
+                ) : (
+                  <TouchableOpacity
+                    style={styles.upgradeButton}
+                    activeOpacity={0.8}
+                    disabled={!!addingId}
+                    onPress={() => handleAdd(a)}
+                  >
+                    <Text style={styles.upgradeButtonText}>Ekle</Text>
                   </TouchableOpacity>
                 ))}
             </View>
