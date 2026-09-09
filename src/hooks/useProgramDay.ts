@@ -6,6 +6,12 @@ import { workoutService } from "../services/workout.service";
 import { useWorkoutStore } from "../store/workoutStore";
 import type { TodayProgramPlan } from "../types/programs";
 
+/** Bugün bu programdan tamamlanmış antrenman - varsa ekranlar "bitti" hâlini gösterir. */
+export interface CompletedTodaySession {
+  id: string;
+  startedAt: string;
+}
+
 /**
  * "Bugün programımda ne var ve tek dokunuşla nasıl başlarım" mantığının tek
  * kaynağı. Hem Ana Sayfa hem Antrenman tab'ı aynı davranışı paylaşsın diye
@@ -13,26 +19,37 @@ import type { TodayProgramPlan } from "../types/programs";
  *
  * plan null            -> takip edilen aktif program yok
  * plan.movements boş   -> program var ama bugün dinlenme günü
+ * completedToday dolu  -> bugünün program antrenmanı zaten bitirilmiş
  */
 export function useProgramDay(userId?: string) {
   const startSessionInStore = useWorkoutStore((s) => s.startSession);
   const addMovement = useWorkoutStore((s) => s.addMovement);
 
   const [plan, setPlan] = useState<TodayProgramPlan | null>(null);
+  const [completedToday, setCompletedToday] = useState<CompletedTodaySession | null>(null);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
 
   const reload = useCallback(async () => {
     if (!userId) {
       setPlan(null);
+      setCompletedToday(null);
       setLoading(false);
       return;
     }
     try {
-      setPlan(await programsService.getActiveProgramForToday(userId));
+      const todayPlan = await programsService.getActiveProgramForToday(userId);
+      setPlan(todayPlan);
+      // Dinlenme gününde "tamamlandı" sorusunun anlamı yok - sorgu da atılmaz.
+      setCompletedToday(
+        todayPlan && todayPlan.movements.length > 0
+          ? await programsService.getTodayCompletedSession(userId, todayPlan.program.id)
+          : null
+      );
     } catch {
       // Program bilgisi ikincil - yüklenemezse ekran programsızmış gibi çalışır.
       setPlan(null);
+      setCompletedToday(null);
     } finally {
       setLoading(false);
     }
@@ -75,6 +92,7 @@ export function useProgramDay(userId?: string) {
     starting,
     reload,
     startToday,
+    completedToday,
     hasProgram: !!plan,
     isRestDay: !!plan && plan.movements.length === 0,
   };

@@ -34,7 +34,7 @@ export default function WorkoutScreen() {
 
   // Bugünün program planı ve "tek dokunuşla başlat" mantığı Ana Sayfa ile ortak
   // hook'tan geliyor - eskiden bu ekranda ayrı bir kopyası duruyordu.
-  const { plan, starting, reload: reloadProgram, startToday } = useProgramDay(userId);
+  const { plan, starting, reload: reloadProgram, startToday, completedToday } = useProgramDay(userId);
 
   const [suggestions, setSuggestions] = useState<FocusSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
@@ -153,15 +153,17 @@ export default function WorkoutScreen() {
                 </View>
               ))}
               <TouchableOpacity
-                style={styles.todayStartButton}
+                style={[styles.todayStartButton, completedToday ? styles.todayDoneButton : null]}
                 activeOpacity={0.85}
                 disabled={starting}
-                onPress={startToday}
+                onPress={completedToday ? () => router.push(`/workout/history/${completedToday.id}`) : startToday}
               >
                 {starting ? (
                   <ActivityIndicator size="small" color={COLORS.white} />
                 ) : (
-                  <Text style={styles.todayStartButtonText}>Bugünün Antrenmanına Başla</Text>
+                  <Text style={[styles.todayStartButtonText, completedToday ? styles.todayDoneButtonText : null]}>
+                    {completedToday ? "Bugünü tamamladın · Antrenmanı gör" : "Bugünün Antrenmanına Başla"}
+                  </Text>
                 )}
               </TouchableOpacity>
             </>
@@ -402,6 +404,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   todayStartButtonText: { fontFamily: "Inter_700Bold", fontSize: 14, color: COLORS.white },
+  todayDoneButton: { backgroundColor: COLORS.paper, borderWidth: 1, borderColor: COLORS.line },
+  todayDoneButtonText: { color: COLORS.graphite },
   card: {
     flexDirection: "row",
     alignItems: "center",

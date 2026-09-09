@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import { toLocalDateKey, todayLocalKey } from "../utils/date";
 import type {
   ProgramAdherence,
   ProgramDraft,
@@ -312,4 +313,102 @@ export const programsService = {
       throw new Error("Bu program düzenlenemiyor. Önce kendi kopyanı oluştur.");
     }
   },
+
+  /**
+   * Programın bir gününe yeni bir hareket ekler. Hedef, hareketin kendi
+   * ustalık hedefinden alınır; sıra o günün sonuna verilir. RLS gereği sadece
+   * kullanıcının kendi programında çalışır.
+   */
+  async addMovementToProgram(
+    programId: string,
+    dayOfWeek: number,
+    movement: { id: string; target_sets: number | null; target_reps: number | null; target_duration_seconds: number | null },
+    restSeconds = 60
+  ): Promise<void> {
+    const { data: last, error: readError } = await supabase
+      .from("program_movements")
+      .select("order_index")
+      .eq("program_id", programId)
+      .eq("day_of_week", dayOfWeek)
+      .order("order_index", { ascending: false })
+      .limit(1);
+    if (readError) throw readError;
+
+    const { data, error } = await supabase
+      .from("program_movements")
+      .insert({
+        program_id: programId,
+        movement_id: movement.id,
+        day_of_week: dayOfWeek,
+        target_sets: movement.target_sets,
+        target_reps: movement.target_reps,
+        target_duration_seconds: movement.target_duration_seconds,
+        rest_seconds: restSeconds,
+        order_index: (last?.[0]?.order_index ?? -1) + 1,
+      })
+      .select("id");
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      throw new Error("Bu program düzenlenemiyor. Önce kendi kopyanı oluştur.");
+    }
+  },
+
+  /**
+   * Bugün (YEREL takvim gününe göre) bu programdan tamamlanmış bir antrenman
+   * var mı? "Bugünün antrenmanını bitirdin" durumunu göstermek için.
+   *
+   * Tarih karşılaştırması SQL'de değil burada yapılıyor: kullanıcı gece
+   * 01:00'de antrenman yaptığında UTC'ye göre "dün" görünür, bu yüzden
+   * uygulamanın her yerinde olduğu gibi toLocalDateKey kullanılıyor.
+   * Son 5 bitmiş oturuma bakmak yeterli - bugünkü mutlaka aralarındadır.
+   */
+  async getTodayCompletedSession(
+    userId: string,
+    programId: string
+  ): Promise<{ id: string; startedAt: string } | null> {
+    const { data, error } = await supabase
+      .from("workout_sessions")
+      .select("id, started_at")
+      .eq("user_id", userId)
+      .eq("program_id", programId)
+      .not("ended_at", "is", null)
+      .order("started_at", { ascending: false })
+      .limit(5);
+    if (error) throw error;
+
+    const today = todayLocalKey();
+    const match = (data ?? []).find((s) => toLocalDateKey(s.started_at) === today);
+    return match ? { id: match.id, startedAt: match.started_at } : null;
+  },
+
+  /**
+   * Bu hafta (Pazartesi 00:00'dan itibaren, YEREL saate gore) bu programdan
+   * tamamlanan antrenmanlarin hangi program gunune denk geldigini doner:
+   * { 1: sessionId, 3: sessionId } gibi. Program detayinda "bu gunu bitirdin"
+   * isaretini basmak icin. Ayni gunde birden fazla antrenman varsa ilki alinir.
+   */
+  async getWeekCompletionsForProgram(userId: string, programId: string): Promise<Record<number, string>> {
+    const monday = startOfWeek(new Date());
+    const { data, error } = await supabase
+      .from("workout_sessions")
+      .select("id, started_at")
+      .eq("user_id", userId)
+      .eq("program_id", programId)
+      .not("ended_at", "is", null)
+      .gte("started_at", monday.toISOString())
+      .order("started_at", { ascending: true });
+    if (error) throw error;
+
+    const result: Record<number, string> = {};
+    (data ?? []).forEach((s) => {
+      // Yerel gun anahtarindan haftanin gunu: gece yapilan antrenman UTC'ye
+      // gore bir onceki gune kaymasin diye tarih hep yerel okunuyor.
+      const local = new Date(`${toLocalDateKey(s.started_at)}T00:00:00`);
+      const jsDay = local.getDay();
+      const dayOfWeek = jsDay === 0 ? 7 : jsDay;
+      if (!result[dayOfWeek]) result[dayOfWeek] = s.id;
+    });
+    return result;
+  },
+
 };

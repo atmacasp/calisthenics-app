@@ -6,7 +6,12 @@ import { useAuthStore } from "../../src/store/authStore";
 import { programsService } from "../../src/services/programs.service";
 import { movementsService } from "../../src/services/movements.service";
 import { progressService } from "../../src/services/progress.service";
-import { computeProgramUpgrades, type ProgramUpgrade } from "../../src/utils/programUpgrades";
+import {
+  computeProgramAdditions,
+  computeProgramUpgrades,
+  type ProgramAddition,
+  type ProgramUpgrade,
+} from "../../src/utils/programUpgrades";
 import type { MovementSetLogMap, MovementWithGroupAndPrerequisites } from "../../src/types/movements";
 import type { ProgramMovementWithName, ProgramWithDays, UserProgramRow } from "../../src/types/programs";
 import { COLORS } from "../../src/constants/theme";
@@ -38,20 +43,24 @@ export default function ProgramDetailScreen() {
   const [movements, setMovements] = useState<MovementWithGroupAndPrerequisites[]>([]);
   const [setLogMap, setSetLogMap] = useState<MovementSetLogMap>({});
   const [upgradingId, setUpgradingId] = useState<string | null>(null);
+  // Bu haftanin tamamlanan program gunleri: { gun: sessionId }
+  const [weekDone, setWeekDone] = useState<Record<number, string>>({});
 
   const loadData = useCallback(async () => {
     if (!id) return;
     try {
-      const [detail, active, allMovements, logs] = await Promise.all([
+      const [detail, active, allMovements, logs, week] = await Promise.all([
         programsService.getProgramWithDays(id),
         userId ? programsService.getActiveUserProgram(userId) : Promise.resolve(null),
         movementsService.getAllMovementsWithPrerequisites(),
         userId ? progressService.getMovementSetLogs(userId) : Promise.resolve({} as MovementSetLogMap),
+        userId ? programsService.getWeekCompletionsForProgram(userId, id) : Promise.resolve({}),
       ]);
       setProgram(detail);
       setActiveProgram(active);
       setMovements(allMovements);
       setSetLogMap(logs);
+      setWeekDone(week);
     } finally {
       setLoading(false);
     }
@@ -178,6 +187,10 @@ export default function ProgramDetailScreen() {
     );
   }
 
+  // JS: 0=Pazar..6=Cumartesi -> semamiz: 1=Pazartesi..7=Pazar
+  const jsDay = new Date().getDay();
+  const todayDayOfWeek = jsDay === 0 ? 7 : jsDay;
+
   const days = Object.keys(program.daysMap)
     .map(Number)
     .sort((a, b) => a - b);
@@ -185,6 +198,7 @@ export default function ProgramDetailScreen() {
   // Hedefini tamamladığın hareketler için bir üst basamak önerisi. Hazır
   // programlarda da hesaplanır - orada aksiyon "kopyala", "yükselt" değil.
   const upgrades = movements.length ? computeProgramUpgrades(program.daysMap, movements, setLogMap) : [];
+  const additions = movements.length ? computeProgramAdditions(program.daysMap, movements, setLogMap) : [];
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -284,8 +298,22 @@ export default function ProgramDetailScreen() {
         <Text style={styles.emptyText}>Bu programda henüz hareket yok.</Text>
       ) : (
         days.map((day) => (
-          <View key={day} style={styles.dayCard}>
-            <Text style={styles.dayTitle}>{DAY_NAMES[day]}</Text>
+          <View key={day} style={[styles.dayCard, isActive && weekDone[day] ? styles.dayCardDone : null]}>
+            <View style={styles.dayHeaderRow}>
+              <Text style={styles.dayTitle}>{DAY_NAMES[day]}</Text>
+              {isActive && weekDone[day] ? (
+                <TouchableOpacity
+                  style={styles.dayDoneChip}
+                  activeOpacity={0.7}
+                  onPress={() => router.push(`/workout/history/${weekDone[day]}`)}
+                >
+                  <Ionicons name="checkmark-circle" size={13} color={COLORS.accent} />
+                  <Text style={styles.dayDoneChipText}>Tamamlandı</Text>
+                </TouchableOpacity>
+              ) : isActive && day === todayDayOfWeek ? (
+                <Text style={styles.dayTodayChip}>Bugün</Text>
+              ) : null}
+            </View>
             {program.daysMap[day].map((pm) => (
               <View key={pm.id} style={styles.movementRow}>
                 <Text style={styles.movementName}>{pm.movementName}</Text>
@@ -403,13 +431,40 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
+  dayHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+    gap: 8,
+  },
   dayTitle: {
     fontFamily: "Inter_700Bold",
     fontSize: 13,
     color: COLORS.accent,
     textTransform: "uppercase",
     letterSpacing: 0.5,
-    marginBottom: 10,
+  },
+  dayCardDone: { borderWidth: 1, borderColor: "rgba(34,197,94,0.35)" },
+  dayDoneChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(34,197,94,0.12)",
+    borderRadius: 9,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  dayDoneChipText: { fontFamily: "Inter_700Bold", fontSize: 11, color: COLORS.accent },
+  dayTodayChip: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 11,
+    color: COLORS.graphite,
+    backgroundColor: COLORS.paper,
+    borderRadius: 9,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    overflow: "hidden",
   },
   movementRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
   movementName: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.ink, flex: 1, marginRight: 8 },

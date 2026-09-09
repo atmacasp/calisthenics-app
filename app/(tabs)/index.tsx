@@ -39,7 +39,7 @@ export default function HomeScreen() {
   const [activeCard, setActiveCard] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const { plan, starting, reload: reloadProgram, startToday, hasProgram, isRestDay } = useProgramDay(session?.user.id);
+  const { plan, starting, reload: reloadProgram, startToday, hasProgram, isRestDay, completedToday } = useProgramDay(session?.user.id);
 
   const loadData = useCallback(async () => {
     if (!session) return;
@@ -89,6 +89,8 @@ export default function HomeScreen() {
 
   // Bugün program günüyse ana buton serbest antrenman değil, o günün antrenmanını açar.
   const isProgramDay = hasProgram && !isRestDay;
+  // Bugünün program antrenmanı bitirilmişse ekran "başla" yerine "tamamlandı" der.
+  const programDoneToday = isProgramDay ? !!completedToday : false;
   const previewMovements = plan?.movements.slice(0, 3) ?? [];
   const remainingCount = (plan?.movements.length ?? 0) - previewMovements.length;
 
@@ -223,6 +225,7 @@ export default function HomeScreen() {
           <View style={styles.programHeaderRow}>
             <Ionicons name="calendar-outline" size={13} color={COLORS.accent} />
             <Text style={styles.programName} numberOfLines={1}>{plan.program.name}</Text>
+            {programDoneToday ? <Text style={styles.programDoneChip}>Tamamlandı</Text> : null}
             <Ionicons name="chevron-forward" size={14} color={COLORS.graphite} />
           </View>
           <Text style={styles.programDay}>Bugün · {plan.dayName}</Text>
@@ -249,23 +252,39 @@ export default function HomeScreen() {
       )}
 
       <TouchableOpacity
-        onPress={isProgramDay ? startToday : () => router.push("/workout/start")}
+        onPress={
+          programDoneToday && completedToday
+            ? () => router.push(`/workout/history/${completedToday.id}`)
+            : isProgramDay
+            ? startToday
+            : () => router.push("/workout/start")
+        }
         activeOpacity={0.85}
         disabled={starting}
-        style={styles.ctaButton}
+        style={[styles.ctaButton, programDoneToday ? styles.ctaDone : null]}
       >
         <View style={styles.ctaIconCircle}>
           {starting ? (
             <ActivityIndicator size="small" color={COLORS.white} />
           ) : (
-            <MaterialCommunityIcons name="dumbbell" size={18} color={COLORS.white} />
+            programDoneToday ? (
+              <Ionicons name="checkmark" size={20} color={COLORS.white} />
+            ) : (
+              <MaterialCommunityIcons name="dumbbell" size={18} color={COLORS.white} />
+            )
           )}
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.ctaText}>{isProgramDay ? "Bugünün Antrenmanına Başla" : "Antrenmana Başla"}</Text>
+          <Text style={styles.ctaText}>
+            {programDoneToday
+              ? "Bugünü tamamladın"
+              : isProgramDay
+              ? "Bugünün Antrenmanına Başla"
+              : "Antrenmana Başla"}
+          </Text>
           {isProgramDay && plan && (
             <Text style={styles.ctaSubtext} numberOfLines={1}>
-              {plan.movements.length} hareket hazır yüklenecek
+              {programDoneToday ? "Antrenman detayını görmek için dokun" : `${plan.movements.length} hareket hazır yüklenecek`}
             </Text>
           )}
         </View>
@@ -274,7 +293,9 @@ export default function HomeScreen() {
 
       {isProgramDay && (
         <TouchableOpacity style={styles.secondaryLink} onPress={() => router.push("/workout/start")} activeOpacity={0.7}>
-          <Text style={styles.secondaryLinkText}>Bunun yerine serbest antrenman başlat</Text>
+          <Text style={styles.secondaryLinkText}>
+            {programDoneToday ? "Yeni bir serbest antrenman başlat" : "Bunun yerine serbest antrenman başlat"}
+          </Text>
         </TouchableOpacity>
       )}
 
@@ -415,6 +436,17 @@ const styles = StyleSheet.create({
   ctaIconCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" },
   ctaText: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.white },
   ctaSubtext: { fontFamily: "Inter_400Regular", fontSize: 12, color: "rgba(255,255,255,0.8)", marginTop: 2 },
+  ctaDone: { backgroundColor: COLORS.ink },
+  programDoneChip: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 10,
+    color: COLORS.accent,
+    backgroundColor: "rgba(34,197,94,0.12)",
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    overflow: "hidden",
+  },
   secondaryLink: { alignItems: "center", marginTop: 10 },
   secondaryLinkText: { fontFamily: "Inter_500Medium", fontSize: 13, color: COLORS.graphite, textDecorationLine: "underline" },
   statsCard: { flexDirection: "row", backgroundColor: COLORS.white, borderRadius: 20, paddingVertical: 20, minHeight: 150, borderWidth: 1, borderColor: COLORS.line },
