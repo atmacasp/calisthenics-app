@@ -148,6 +148,23 @@ export const workoutService = {
     return Array.from(byMovement.values());
   },
 
+  /**
+   * En son BİTMİŞ antrenmanın id'si. "Son antrenmanı tekrarla" için;
+   * hareket listesini getSessionState ile buradan kuruyoruz.
+   */
+  async getLastFinishedSessionId(userId: string): Promise<string | null> {
+    const { data, error } = await supabase
+      .from("workout_sessions")
+      .select("id")
+      .eq("user_id", userId)
+      .not("ended_at", "is", null)
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return data?.id ?? null;
+  },
+
   /** Yarım kalmış bir oturumu setleriyle birlikte siler (workout_sets FK cascade). */
   async discardSession(sessionId: string) {
     const { error } = await supabase.from("workout_sessions").delete().eq("id", sessionId);

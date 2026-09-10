@@ -5,11 +5,13 @@ import { router, useLocalSearchParams, Stack } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../../src/store/authStore";
-import { useWorkoutStore, type LoggedSet } from "../../../src/store/workoutStore";
+import { useWorkoutStore, type LoggedSet, type SessionMovement } from "../../../src/store/workoutStore";
 import { workoutService } from "../../../src/services/workout.service";
 import { workoutsService } from "../../../src/services/workouts.service";
 import { progressService } from "../../../src/services/progress.service";
+import { movementsService } from "../../../src/services/movements.service";
 import { performanceService, type PreviousPerformance } from "../../../src/services/performance.service";
+import { computeFocusSuggestions, orderSuggestions } from "../../../src/utils/workoutSuggestions";
 import { COLORS, themedStyles, useColors, type ThemeColors } from "../../../src/constants/theme";
 import { formatTarget } from "../../../src/utils/targetProgress";
 import { useSetRemoval } from "../../../src/hooks/useSetRemoval";
@@ -97,6 +99,7 @@ export default function WorkoutSessionScreen() {
   const sessionMovements = useWorkoutStore((s) => s.sessionMovements);
   const sessionProgramLabel = useWorkoutStore((s) => s.sessionProgramLabel);
   const addSetToMovement = useWorkoutStore((s) => s.addSetToMovement);
+  const addMovement = useWorkoutStore((s) => s.addMovement);
   const removeMovement = useWorkoutStore((s) => s.removeMovement);
   const { confirmRemoveSet } = useSetRemoval();
   const reset = useWorkoutStore((s) => s.reset);
@@ -120,6 +123,13 @@ export default function WorkoutSessionScreen() {
   // "Geçen sefer" referansı: bu antrenman hariç, her hareketin en son bitmiş
   // antrenmandaki setleri.
   const [previousPerformance, setPreviousPerformance] = useState<Record<string, PreviousPerformance>>({});
+  // Boş antrenman ekranının kısayolları. Sadece hiç hareket yokken yükleniyor -
+  // dolu bir antrenmanda bu sorgular boşuna çalışmasın.
+  const [quickPicks, setQuickPicks] = useState<
+    { movementId: string; name: string; groupName: string | null; targetLabel: string | null; seed: SessionMovement }[]
+  >([]);
+  const [lastMovements, setLastMovements] = useState<SessionMovement[]>([]);
+  const quickPicksLoaded = useRef(false);
   const intervalRef = useRef<any>(null);
   // Sayaç kendiliğinden mi bitti, kullanıcı mı atladı - titreşim için ayırt ediliyor.
   const restWasRunning = useRef(false);
@@ -206,6 +216,73 @@ export default function WorkoutSessionScreen() {
     });
   }, [authSession]);
 
+  /**
+   * Boş antrenman ekranının kısayolları: kilidi açık ilk basamaklar ve son
+   * antrenmanın hareketleri. Bir kez, yalnızca ekran gerçekten boşken yüklenir.
+   */
+  useEffect(() => {
+    if (!authSession || quickPicksLoaded.current || sessionMovements.length > 0) return;
+    quickPicksLoaded.current = true;
+
+    (async () => {
+      try {
+        const [movements, logs] = await Promise.all([
+          movementsService.getAllMovementsWithPrerequisites(),
+          progressService.getMovementSetLogs(authSession.user.id),
+        ]);
+        const focus = orderSuggestions(computeFocusSuggestions(movements, logs))
+          .filter((s) => !s.locked && !s.completed)
+          .slice(0, 3);
+
+        setQuickPicks(
+          focus.map((s) => ({
+            movementId: s.movement.id,
+            name: s.movement.name,
+            groupName: s.movement.movement_groups?.name ?? null,
+            targetLabel: formatTarget(s.movement),
+            seed: {
+              movementId: s.movement.id,
+              name: s.movement.name,
+              groupName: s.movement.movement_groups?.name ?? null,
+              targetType: s.movement.target_type,
+              targetSets: s.movement.target_sets,
+              targetReps: s.movement.target_reps,
+              targetDurationSeconds: s.movement.target_duration_seconds,
+              sets: [],
+            } as SessionMovement,
+          }))
+        );
+      } catch {
+        setQuickPicks([]);
+      }
+
+      try {
+        const lastId = await workoutService.getLastFinishedSessionId(authSession.user.id);
+        if (!lastId) return;
+        setLastMovements(await workoutService.getSessionState(lastId));
+      } catch {
+        setLastMovements([]);
+      }
+    })();
+  }, [authSession, sessionMovements.length]);
+
+  const addSeed = (seed: SessionMovement) => {
+    addMovement({
+      id: seed.movementId,
+      name: seed.name,
+      groupName: seed.groupName,
+      targetType: seed.targetType,
+      targetSets: seed.targetSets,
+      targetReps: seed.targetReps,
+      targetDurationSeconds: seed.targetDurationSeconds,
+      restSeconds: seed.restSeconds,
+    });
+  };
+
+  const repeatLastWorkout = () => {
+    lastMovements.forEach((movement) => addSeed(movement));
+  };
+
   const toggleCollapsed = (movementId: string) => {
     setCollapsedIds((prev) => {
       const next = new Set(prev);
@@ -288,11 +365,36 @@ export default function WorkoutSessionScreen() {
     }
   };
 
+  /**
+   * Hiç set girilmemiş antrenmanı bitirmek yerine iptal ediyoruz: eskiden
+   * "önce set kaydet" uyarısı çıkıyor ve kullanıcı bu ekrandan çıkamıyordu,
+   * boş oturum satırı da DB'de kalıyordu.
+   */
+  const cancelWorkout = () => {
+    if (!id) return;
+    Alert.alert("Antrenmanı İptal Et", "Hiç set kaydedilmedi, bu antrenman silinecek.", [
+      { text: "Vazgeç", style: "cancel" },
+      {
+        text: "İptal Et",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await workoutService.discardSession(id);
+          } catch {
+            // Satır zaten yoksa sorun değil; önemli olan ekrandan çıkabilmek.
+          }
+          reset();
+          router.replace("/(tabs)/workout");
+        },
+      },
+    ]);
+  };
+
   const finishWorkout = async () => {
     if (!id || !authSession) return;
 
     if (totalLoggedSets === 0) {
-      Alert.alert("Henüz set kaydedilmedi", "Antrenmanı bitirmeden önce en az bir set kaydetmelisin.");
+      cancelWorkout();
       return;
     }
 
@@ -383,9 +485,50 @@ export default function WorkoutSessionScreen() {
         )}
 
         {sessionMovements.length === 0 && (
-          <View style={styles.emptyBox}>
-            <Feather name="activity" size={28} color={COLORS.line} />
-            <Text style={styles.emptyText}>Henüz hareket eklenmedi. Aşağıdan bir hareket ekle.</Text>
+          <View style={styles.emptyWrap}>
+            <Text style={styles.emptyTitle}>Bugün ne çalışıyorsun?</Text>
+            <Text style={styles.emptyText}>
+              Aşağıdan seç, ya da hareket kütüphanesinden kendin ekle. Antrenman ilk seti kaydedince başlar.
+            </Text>
+
+            {lastMovements.length > 0 && (
+              <TouchableOpacity style={styles.repeatCard} onPress={repeatLastWorkout} activeOpacity={0.85}>
+                <View style={styles.repeatIcon}>
+                  <Feather name="rotate-ccw" size={16} color={COLORS.accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.repeatTitle}>Son antrenmanını tekrarla</Text>
+                  <Text style={styles.repeatMeta} numberOfLines={1}>
+                    {lastMovements.map((m) => m.name).join(" · ")}
+                  </Text>
+                </View>
+                <Feather name="plus" size={18} color={COLORS.accent} />
+              </TouchableOpacity>
+            )}
+
+            {quickPicks.length > 0 && (
+              <>
+                <Text style={styles.quickHeader}>Sırada bu var</Text>
+                {quickPicks.map((pick) => (
+                  <TouchableOpacity
+                    key={pick.movementId}
+                    style={styles.quickCard}
+                    onPress={() => addSeed(pick.seed)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.quickAccent} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.quickName}>{pick.name}</Text>
+                      <Text style={styles.quickMeta}>
+                        {pick.groupName ?? ""}
+                        {pick.targetLabel ? ` · ${pick.targetLabel}` : ""}
+                      </Text>
+                    </View>
+                    <Feather name="plus" size={18} color={COLORS.accent} />
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
           </View>
         )}
 
@@ -538,8 +681,14 @@ export default function WorkoutSessionScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.finishButton} onPress={finishWorkout} activeOpacity={0.85}>
-        <Text style={styles.finishButtonText}>Antrenmanı Bitir</Text>
+        <TouchableOpacity
+          style={[styles.finishButton, totalLoggedSets === 0 && styles.cancelButton]}
+          onPress={finishWorkout}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.finishButtonText, totalLoggedSets === 0 && styles.cancelButtonText]}>
+            {totalLoggedSets === 0 ? "Antrenmanı İptal Et" : "Antrenmanı Bitir"}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -592,12 +741,59 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
   skipText: { color: COLORS.accent, fontFamily: "Inter_600SemiBold", fontSize: 14 },
   restTrack: { position: "absolute", left: 0, right: 0, bottom: 0, height: 3, backgroundColor: "rgba(250,249,246,0.15)" },
   restFill: { height: 3, backgroundColor: COLORS.accent },
-  emptyBox: { alignItems: "center", marginTop: 40, gap: 10 },
+  emptyWrap: { marginTop: 18, marginBottom: 4 },
+  emptyTitle: { fontFamily: "Inter_700Bold", fontSize: 19, color: COLORS.ink },
   emptyText: {
-    textAlign: "center",
     color: COLORS.graphite,
     fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 6,
   },
+  repeatCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.25)",
+    padding: 14,
+    marginTop: 18,
+  },
+  repeatIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "rgba(34,197,94,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  repeatTitle: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.ink },
+  repeatMeta: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.graphite, marginTop: 2 },
+  quickHeader: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 12,
+    color: COLORS.graphite,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginTop: 22,
+    marginBottom: 10,
+  },
+  quickCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    padding: 14,
+    marginBottom: 8,
+  },
+  quickAccent: { width: 3, alignSelf: "stretch", borderRadius: 2, backgroundColor: COLORS.accent },
+  quickName: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.ink },
+  quickMeta: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.graphite, marginTop: 2 },
   card: {
     backgroundColor: COLORS.surface,
     borderRadius: 14,
@@ -678,5 +874,7 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
   },
   finishButton: { backgroundColor: COLORS.inverse, borderRadius: 16, paddingVertical: 16 },
   finishButtonText: { color: COLORS.onAccent, textAlign: "center", fontFamily: "Inter_700Bold", fontSize: 16 },
+  cancelButton: { backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.line },
+  cancelButtonText: { color: COLORS.graphite },
   })
 );

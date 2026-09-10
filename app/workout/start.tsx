@@ -11,6 +11,7 @@ export default function WorkoutStartScreen() {
   const session = useAuthStore((s) => s.session);
   const startSession = useWorkoutStore((s) => s.startSession);
   const restoreSession = useWorkoutStore((s) => s.restoreSession);
+  const activeSessionId = useWorkoutStore((s) => s.activeSessionId);
 
   useEffect(() => {
     if (!session) return;
@@ -24,7 +25,12 @@ export default function WorkoutStartScreen() {
         // kullanırız - aksi halde her yarım deneme DB'de çöp satır bırakıyordu.
         if (unfinished && unfinished.setCount === 0) {
           if (cancelled) return;
-          startSession(unfinished.id, unfinished.programName);
+          // Bellekteki oturum zaten buysa startSession çağırma: o, hareket
+          // listesini sıfırlıyor. Kullanıcı hareket ekleyip (henüz set
+          // girmeden) ana sayfaya döndüyse seçtikleri kaybolurdu.
+          if (activeSessionId !== unfinished.id) {
+            startSession(unfinished.id, unfinished.programName);
+          }
           router.replace(`/workout/session/${unfinished.id}`);
           return;
         }

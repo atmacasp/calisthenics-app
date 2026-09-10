@@ -39,10 +39,8 @@ export function ActiveSessionBanner({
 
   if (!pending) return null;
 
-  const detail =
-    pending.setCount > 0
-      ? `${pending.movementCount} hareket · ${pending.setCount} set`
-      : "Henüz set kaydedilmedi";
+  // Bant yalnızca seti olan oturumlar için çıkıyor (useActiveSession).
+  const detail = `${pending.movementCount} hareket · ${pending.setCount} set`;
 
   return (
     <View style={[styles.banner, style]}>

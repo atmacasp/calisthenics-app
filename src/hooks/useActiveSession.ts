@@ -24,7 +24,14 @@ export function useActiveSession(userId?: string) {
       return;
     }
     try {
-      setPending(await workoutService.getUnfinishedSession(userId));
+      const found = await workoutService.getUnfinishedSession(userId);
+      // Hiç set kaydedilmemiş oturum "devam eden antrenman" DEĞİLDİR.
+      // Kullanıcı yanlışlıkla "Antrenmana Başla"ya basmış olabiliyordu ve ana
+      // sayfa hemen kurtarma bandını çıkarıyordu. Üstelik kurtarılacak bir şey
+      // de yok: eklenmiş ama seti girilmemiş hareketler yalnızca bellekte
+      // yaşıyor (getSessionState setlerden kuruyor). Boş satır çöp de
+      // bırakmıyor, workout/start.tsx onu yeniden kullanıyor.
+      setPending(found && found.setCount > 0 ? found : null);
     } catch {
       setPending(null);
     }
@@ -46,11 +53,8 @@ export function useActiveSession(userId?: string) {
 
   const discard = useCallback(() => {
     if (!pending || busy) return;
-    const detail =
-      pending.setCount > 0
-        ? `Bu antrenmandaki ${pending.setCount} set kalıcı olarak silinecek.`
-        : "Bu antrenmanda hiç set kaydedilmemiş.";
-    Alert.alert("Antrenmanı Sil", detail, [
+    // pending yalnızca seti olan oturumlar için doluyor (bkz. reload).
+    Alert.alert("Antrenmanı Sil", `Bu antrenmandaki ${pending.setCount} set kalıcı olarak silinecek.`, [
       { text: "Vazgeç", style: "cancel" },
       {
         text: "Sil",
