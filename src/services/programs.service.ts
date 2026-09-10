@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase";
 import { toLocalDateKey, todayLocalKey } from "../utils/date";
+import type { DayRemap } from "../utils/programDays";
 import type {
   ProgramAdherence,
   ProgramDraft,
@@ -283,6 +284,38 @@ export const programsService = {
       level: source.level as ProgramDraft["level"],
       days,
     });
+  },
+
+  /**
+   * Programın antrenman günlerini toplu olarak kaydırır (Pzt/Çrş/Cuma ->
+   * Sal/Per/Cmt gibi). Hareketler, hedefler, sıra ve dinlenme süreleri aynen
+   * kalır; yalnızca day_of_week değişir.
+   *
+   * İş tek bir SQL update'i olan remap_program_days RPC'sinde (migration 0017):
+   * gün gün güncelleseydik "1'i 3 yap" sonra "3'ü 5 yap" adımları ilk adımda
+   * taşınan satırları ikinci kez taşırdı, ayrıca PostgREST üzerinden birden
+   * fazla update tek transaction olmadığı için yarım kalma riski vardı.
+   *
+   * RPC security invoker olduğundan RLS aynen geçerli: kendi programı değilse
+   * hata değil 0 satır döner, onu açık bir mesaja çeviriyoruz.
+   */
+  async remapProgramDays(programId: string, remap: DayRemap): Promise<number> {
+    const payload: Record<string, number> = {};
+    Object.entries(remap).forEach(([from, to]) => {
+      payload[String(from)] = to;
+    });
+
+    const { data, error } = await supabase.rpc("remap_program_days", {
+      p_program_id: programId,
+      p_map: payload,
+    });
+    if (error) throw error;
+
+    const updated = typeof data === "number" ? data : 0;
+    if (updated === 0) {
+      throw new Error("Bu program düzenlenemiyor. Önce kendi kopyanı oluştur.");
+    }
+    return updated;
   },
 
   /**

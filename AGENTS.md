@@ -28,3 +28,7 @@ geri alınıyordu - 0015'te bu oldu.)
 
 SUPABASE_DB_URL, Dashboard > Connect > Session pooler URI'sidir ve repo dışında
 ~/.config/calisthenics/db.env içinde durur.
+
+Yeni bir RPC (SQL fonksiyonu) eklendiğinde src/types/database.types.ts'teki
+Functions bloğuna da yazılmalı - supabase istemcisi Database tipiyle kurulu
+olduğu için fonksiyon adları tipli; eksikse supabase.rpc(...) typecheck'te patlar.

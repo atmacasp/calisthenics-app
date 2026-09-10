@@ -347,6 +347,11 @@ export interface Database {
         Args: Record<string, never>;
         Returns: undefined;
       };
+      /** migration 0017 - program günlerini tek update ile kaydırır, taşınan satır sayısını döner */
+      remap_program_days: {
+        Args: { p_program_id: string; p_map: Record<string, number> };
+        Returns: number;
+      };
     };
     Enums: {
       [_ in never]: never;

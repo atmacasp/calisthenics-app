@@ -1,5 +1,5 @@
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from "react-native";
-import { useCallback, useState } from "react";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Modal } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalSearchParams, Stack, useFocusEffect, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/authStore";
@@ -12,6 +12,7 @@ import {
   type ProgramAddition,
   type ProgramUpgrade,
 } from "../../src/utils/programUpgrades";
+import { DAY_SHORT, buildDayRemap, describeRemap, getTrainingDays, isNoopRemap } from "../../src/utils/programDays";
 import type { MovementSetLogMap, MovementWithGroupAndPrerequisites } from "../../src/types/movements";
 import type { ProgramMovementWithName, ProgramWithDays, UserProgramRow } from "../../src/types/programs";
 import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
@@ -35,7 +36,9 @@ function formatProgramTarget(pm: ProgramMovementWithName): string {
 export default function ProgramDetailScreen() {
   const COLORS = useColors();
   const styles = getStyles(COLORS);
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // pickDays: bir program kopyalandıktan sonra gün seçiciyi kendiliğinden aç -
+  // kopyalayan çoğu kişi şablonu değil sadece günleri değiştirmek istiyor.
+  const { id, pickDays } = useLocalSearchParams<{ id: string; pickDays?: string }>();
   const userId = useAuthStore((s) => s.session?.user.id);
   const [program, setProgram] = useState<ProgramWithDays | null>(null);
   const [activeProgram, setActiveProgram] = useState<UserProgramRow | null>(null);
@@ -47,6 +50,10 @@ export default function ProgramDetailScreen() {
   // Bu haftanin tamamlanan program gunleri: { gun: sessionId }
   const [weekDone, setWeekDone] = useState<Record<number, string>>({});
   const [addingId, setAddingId] = useState<string | null>(null);
+  const [daysOpen, setDaysOpen] = useState(false);
+  const [selectedDays, setSelectedDays] = useState<number[]>([]);
+  const [savingDays, setSavingDays] = useState(false);
+  const autoOpenedDays = useRef(false);
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -103,12 +110,63 @@ export default function ProgramDetailScreen() {
     }
   };
 
+  const trainingDays = program ? getTrainingDays(program.daysMap) : [];
+
+  const openDayPicker = useCallback(() => {
+    setSelectedDays(program ? getTrainingDays(program.daysMap) : []);
+    setDaysOpen(true);
+  }, [program]);
+
+  // Kopyalama sonrası tek seferlik otomatik açılış.
+  useEffect(() => {
+    if (!pickDays || autoOpenedDays.current || !program || !isMine) return;
+    autoOpenedDays.current = true;
+    openDayPicker();
+  }, [pickDays, program, isMine, openDayPicker]);
+
+  const toggleDay = (day: number) => {
+    setSelectedDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
+  };
+
+  const daySelectionReady = selectedDays.length === trainingDays.length && trainingDays.length > 0;
+
+  let dayRemapPreview: string[] = [];
+  let dayRemapIsNoop = true;
+  if (daySelectionReady) {
+    try {
+      const remap = buildDayRemap(trainingDays, selectedDays);
+      dayRemapPreview = describeRemap(remap);
+      dayRemapIsNoop = isNoopRemap(remap);
+    } catch {
+      dayRemapPreview = [];
+    }
+  }
+
+  const handleSaveDays = async () => {
+    if (!program || savingDays) return;
+    try {
+      const remap = buildDayRemap(trainingDays, selectedDays);
+      if (isNoopRemap(remap)) {
+        setDaysOpen(false);
+        return;
+      }
+      setSavingDays(true);
+      await programsService.remapProgramDays(program.id, remap);
+      setDaysOpen(false);
+      await loadData();
+    } catch (error: any) {
+      Alert.alert("Günler değiştirilemedi", error.message ?? "Bilinmeyen bir hata oldu");
+    } finally {
+      setSavingDays(false);
+    }
+  };
+
   const handleDuplicate = async () => {
     if (!userId || !program || updating) return;
     setUpdating(true);
     try {
       const copy = await programsService.duplicateProgram(userId, program.id);
-      router.replace(`/programs/${copy.id}`);
+      router.replace(`/programs/${copy.id}?pickDays=1`);
     } catch (error: any) {
       Alert.alert("Hata", error.message ?? "Program kopyalanamadı");
     } finally {
@@ -234,6 +292,7 @@ export default function ProgramDetailScreen() {
   const additions = movements.length ? computeProgramAdditions(program.daysMap, movements, setLogMap) : [];
 
   return (
+    <>
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Stack.Screen options={{ headerShown: true, title: program.name }} />
 
@@ -273,6 +332,15 @@ export default function ProgramDetailScreen() {
           >
             <Ionicons name="create-outline" size={16} color={COLORS.ink} />
             <Text style={styles.ownerButtonText}>Düzenle</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.ownerButton}
+            onPress={openDayPicker}
+            activeOpacity={0.8}
+            disabled={trainingDays.length === 0}
+          >
+            <Ionicons name="calendar-outline" size={16} color={COLORS.ink} />
+            <Text style={styles.ownerButtonText}>Günler</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.ownerButton} onPress={handleDelete} activeOpacity={0.8}>
             <Ionicons name="trash-outline" size={16} color={COLORS.warn} />
@@ -396,6 +464,69 @@ export default function ProgramDetailScreen() {
         ))
       )}
     </ScrollView>
+
+    <Modal visible={daysOpen} animationType="slide" transparent onRequestClose={() => setDaysOpen(false)}>
+      <View style={styles.sheetBackdrop}>
+        <View style={styles.sheet}>
+          <View style={styles.sheetHeader}>
+            <Text style={styles.sheetTitle}>Antrenman Günleri</Text>
+            <TouchableOpacity onPress={() => setDaysOpen(false)} hitSlop={10}>
+              <Ionicons name="close" size={22} color={COLORS.ink} />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.sheetSubtitle}>
+            Şablona dokunulmaz - hareketler, hedefler ve sıra aynı kalır, sadece hangi günlere denk geldiği değişir.
+          </Text>
+
+          <View style={styles.dayChipRow}>
+            {[1, 2, 3, 4, 5, 6, 7].map((day) => {
+              const picked = selectedDays.includes(day);
+              return (
+                <TouchableOpacity
+                  key={day}
+                  style={[styles.dayChip, picked && styles.dayChipActive]}
+                  onPress={() => toggleDay(day)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.dayChipText, picked && styles.dayChipTextActive]}>{DAY_SHORT[day]}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <Text style={[styles.sheetCounter, daySelectionReady && { color: COLORS.accent }]}>
+            {selectedDays.length}/{trainingDays.length} gün seçildi
+          </Text>
+
+          {dayRemapPreview.length > 0 && (
+            <View style={styles.remapBox}>
+              {dayRemapPreview.map((line) => (
+                <Text key={line} style={styles.remapLine}>
+                  {line}
+                </Text>
+              ))}
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={[styles.sheetSaveButton, (!daySelectionReady || dayRemapIsNoop) && styles.sheetSaveButtonDisabled]}
+            onPress={handleSaveDays}
+            activeOpacity={0.85}
+            disabled={!daySelectionReady || dayRemapIsNoop || savingDays}
+          >
+            {savingDays ? (
+              <ActivityIndicator size="small" color={COLORS.onAccent} />
+            ) : (
+              <Text style={styles.sheetSaveButtonText}>
+                {dayRemapIsNoop && daySelectionReady ? "Değişiklik yok" : "Günleri Taşı"}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+    </>
   );
 }
 
@@ -443,6 +574,57 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
     borderColor: COLORS.line,
   },
   ownerButtonText: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.ink },
+  sheetBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  sheet: {
+    backgroundColor: COLORS.paper,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    padding: 22,
+    paddingBottom: 34,
+  },
+  sheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  sheetTitle: { fontFamily: "Inter_700Bold", fontSize: 18, color: COLORS.ink },
+  sheetSubtitle: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    lineHeight: 18,
+    color: COLORS.graphite,
+    marginTop: 6,
+  },
+  dayChipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 18 },
+  dayChip: {
+    minWidth: 46,
+    paddingHorizontal: 10,
+    paddingVertical: 11,
+    borderRadius: 12,
+    alignItems: "center",
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+  },
+  dayChipActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
+  dayChipText: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: COLORS.ink },
+  dayChipTextActive: { color: COLORS.onAccent },
+  sheetCounter: { fontFamily: "Inter_500Medium", fontSize: 12, color: COLORS.graphite, marginTop: 12 },
+  remapBox: {
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 12,
+    gap: 4,
+  },
+  remapLine: { fontFamily: "Inter_500Medium", fontSize: 13, color: COLORS.ink },
+  sheetSaveButton: {
+    marginTop: 18,
+    backgroundColor: COLORS.accent,
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: "center",
+  },
+  sheetSaveButtonDisabled: { backgroundColor: COLORS.line },
+  sheetSaveButtonText: { fontFamily: "Inter_700Bold", fontSize: 15, color: COLORS.onAccent },
   upgradeCard: {
     backgroundColor: COLORS.surface,
     borderRadius: 14,
