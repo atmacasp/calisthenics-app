@@ -1,0 +1,22 @@
+diff --git a/src/components/GroupCard.tsx b/src/components/GroupCard.tsx
+--- a/src/components/GroupCard.tsx
++++ b/src/components/GroupCard.tsx
+@@ -68,7 +68,7 @@ export function GroupCard({
+             "transparent" yapmak Android'de gri bant bırakıyor. */}
+         <LinearGradient
+           colors={[`${COLORS.surface}00`, `${COLORS.surface}CC`, COLORS.surface]}
+-          locations={[0, 0.55, 1]}
++          locations={[0, 0.62, 1]}
+           style={styles.fade}
+         />
+ 
+@@ -133,7 +133,7 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
+     },
+     media: { width: "100%", aspectRatio: 1.35, justifyContent: "flex-end" },
+     glyphWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
+-    fade: { position: "absolute", left: 0, right: 0, bottom: 0, height: "62%" },
++    fade: { position: "absolute", left: 0, right: 0, bottom: 0, height: "50%" },
+     awardBadge: {
+       position: "absolute",
+       top: 10,
+@@ -0,0 +0,0 @@

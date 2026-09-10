@@ -1,7 +1,8 @@
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, FlatList, StyleSheet, ActivityIndicator } from "react-native";
 import { useCallback, useMemo, useState } from "react";
 import { router, useFocusEffect } from "expo-router";
-import { Feather } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { GroupCard } from "../../src/components/GroupCard";
 import { movementsService } from "../../src/services/movements.service";
 import { progressService } from "../../src/services/progress.service";
 import { useAuthStore } from "../../src/store/authStore";
@@ -73,56 +74,34 @@ export default function LibraryScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
-        <Text style={styles.headerTitle}>Hareket Kütüphanesi</Text>
+        <View style={styles.headerTitleRow}>
+          <MaterialCommunityIcons name="arm-flex" size={22} color={COLORS.accent} />
+          <Text style={styles.headerTitle}>Hareket Kütüphanesi</Text>
+        </View>
         <Text style={styles.headerSubtitle}>Her kategoride nerede olduğunu gör, sıradaki basamağa geç</Text>
       </View>
 
       <FlatList
         data={groups}
         keyExtractor={(item) => item.id}
+        numColumns={2}
+        columnWrapperStyle={styles.row}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => {
           const p = progressByGroup[item.id] ?? { completed: 0, total: 0, nextName: null, nextLocked: false };
-          const ratio = p.total > 0 ? p.completed / p.total : 0;
-          const finished = p.total > 0 && p.completed === p.total;
 
           return (
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.7}
+            <GroupCard
+              name={item.name}
+              slug={item.slug}
+              imageUrl={item.image_url}
+              completed={p.completed}
+              total={p.total}
+              nextName={p.nextName}
+              nextLocked={p.nextLocked}
               onPress={() => router.push(`/movement-group/${item.id}?name=${encodeURIComponent(item.name)}`)}
-            >
-              <View style={styles.cardAccent} />
-
-              <View style={styles.cardBody}>
-                <View style={styles.titleRow}>
-                  <Text style={styles.cardTitle}>{item.name}</Text>
-                  {finished && <Feather name="award" size={16} color={COLORS.accent} />}
-                </View>
-
-                <Text style={[styles.nextText, finished && styles.nextTextDone]} numberOfLines={1}>
-                  {finished
-                    ? "Tüm basamaklar tamamlandı"
-                    : p.nextName
-                    ? `${p.nextLocked ? "Kilitli" : "Sırada"}: ${p.nextName}`
-                    : "Bu kategoride hareket yok"}
-                </Text>
-
-                {p.total > 0 && (
-                  <>
-                    <View style={styles.barTrack}>
-                      <View style={[styles.barFill, { width: `${Math.round(ratio * 100)}%` }]} />
-                    </View>
-                    <Text style={styles.countText}>
-                      {p.completed} / {p.total} basamak
-                    </Text>
-                  </>
-                )}
-              </View>
-
-              <Feather name="chevron-right" size={20} color={COLORS.graphite} />
-            </TouchableOpacity>
+            />
           );
         }}
       />
@@ -139,11 +118,11 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
     paddingTop: 48,
     paddingBottom: 16,
   },
+  headerTitleRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },
   headerTitle: {
     fontFamily: "Inter_700Bold",
     fontSize: 26,
     color: COLORS.ink,
-    marginBottom: 6,
   },
   headerSubtitle: {
     fontFamily: "Inter_400Regular",
@@ -152,59 +131,10 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
     lineHeight: 20,
   },
   listContent: {
-    paddingHorizontal: 22,
+    paddingHorizontal: 18,
     paddingBottom: 90, // Tab bar arkasında kalmaması için geniş alt alan
     paddingTop: 8,
   },
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    marginBottom: 14,
-    paddingVertical: 16,
-    paddingRight: 16,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  cardAccent: {
-    width: 4,
-    height: 40,
-    backgroundColor: COLORS.accent,
-    borderTopRightRadius: 4,
-    borderBottomRightRadius: 4,
-    marginRight: 16,
-  },
-  cardBody: { flex: 1 },
-  titleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  cardTitle: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 17,
-    color: COLORS.ink,
-  },
-  nextText: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 12,
-    color: COLORS.graphite,
-    marginTop: 3,
-  },
-  nextTextDone: { fontFamily: "Inter_600SemiBold", color: COLORS.accent },
-  barTrack: {
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: COLORS.line,
-    overflow: "hidden",
-    marginTop: 10,
-  },
-  barFill: { height: 5, borderRadius: 3, backgroundColor: COLORS.accent },
-  countText: {
-    fontFamily: "Inter_500Medium",
-    fontSize: 11,
-    color: COLORS.graphite,
-    marginTop: 5,
-  },
+  row: { gap: 12, marginBottom: 12 },
   })
 );

@@ -1,0 +1,275 @@
+diff --git a/app/workout/session/[id].tsx b/app/workout/session/[id].tsx
+--- a/app/workout/session/[id].tsx
++++ b/app/workout/session/[id].tsx
+@@ -12,6 +12,7 @@ import { progressService } from "../../../src/services/progress.service";
+ import { movementsService } from "../../../src/services/movements.service";
+ import { performanceService, type PreviousPerformance } from "../../../src/services/performance.service";
+ import { computeFocusSuggestions, orderSuggestions } from "../../../src/utils/workoutSuggestions";
++import { buildSetPlan, lastSetFeedback } from "../../../src/utils/setCoach";
+ import { COLORS, themedStyles, useColors, type ThemeColors } from "../../../src/constants/theme";
+ import { formatTarget } from "../../../src/utils/targetProgress";
+ import { useSetRemoval } from "../../../src/hooks/useSetRemoval";
+@@ -130,6 +131,10 @@ export default function WorkoutSessionScreen() {
+   >([]);
+   const [lastMovements, setLastMovements] = useState<SessionMovement[]>([]);
+   const quickPicksLoaded = useRef(false);
++  // Hangi hareket için kaçıncı sette reçete doldurulduğu. Set sayısı her
++  // değiştiğinde bir sonraki setin önerisi bir kez yazılır; arada kullanıcı ne
++  // yazarsa o kalır.
++  const seededSetCount = useRef<Record<string, number>>({});
+   const intervalRef = useRef<any>(null);
+   // Sayaç kendiliğinden mi bitti, kullanıcı mı atladı - titreşim için ayırt ediliyor.
+   const restWasRunning = useRef(false);
+@@ -292,6 +297,47 @@ export default function WorkoutSessionScreen() {
+     });
+   };
+ 
++  /**
++   * Sıradaki setin önerisini giriş alanına yazar. Ekran artık boş bir form değil,
++   * "şimdi şu kadar yap" diyen bir reçete; kullanıcı isterse üstüne yazıyor.
++   * Ek ağırlık bilerek korunuyor - genelde setten sete değişmiyor.
++   */
++  useEffect(() => {
++    const pending = sessionMovements.filter(
++      (m) => seededSetCount.current[m.movementId] !== m.sets.length
++    );
++    if (pending.length === 0) return;
++
++    pending.forEach((m) => {
++      seededSetCount.current[m.movementId] = m.sets.length;
++    });
++
++    setInputs((prev) => {
++      const next = { ...prev };
++      pending.forEach((m) => {
++        const plan = buildSetPlan(m);
++        const current = prev[m.movementId] ?? { reps: "", duration: "", weight: "" };
++        next[m.movementId] = {
++          reps: plan.kind === "reps" ? plan.prefill : current.reps,
++          duration: plan.kind === "duration" ? plan.prefill : current.duration,
++          weight: current.weight,
++        };
++      });
++      return next;
++    });
++  }, [sessionMovements]);
++
++  /** Sayaç butonları: tekrar birer birer, süre beşer beşer değişiyor. */
++  const bumpValue = (movementId: string, field: "reps" | "duration", delta: number) => {
++    setInputs((prev) => {
++      const current = prev[movementId] ?? { reps: "", duration: "", weight: "" };
++      const parsed = parseInt(current[field] || "0", 10);
++      const base = Number.isNaN(parsed) ? 0 : parsed;
++      const value = Math.max(0, base + delta);
++      return { ...prev, [movementId]: { ...current, [field]: value > 0 ? String(value) : "" } };
++    });
++  };
++
+   const updateInput = (movementId: string, field: "reps" | "duration" | "weight", rawValue: string) => {
+     const value = field === "weight" ? sanitizeDecimal(rawValue) : sanitizeInteger(rawValue);
+     setInputs((prev) => ({ ...prev, [movementId]: { ...prev[movementId], [field]: value } }));
+@@ -542,8 +588,13 @@ export default function WorkoutSessionScreen() {
+             target_duration_seconds: movement.targetDurationSeconds ?? null,
+           });
+           const collapsed = collapsedIds.has(movement.movementId);
+-          const showDuration = movement.targetType !== "reps_sets";
+-          const showReps = movement.targetType !== "duration";
++          const plan = buildSetPlan(movement);
++          const feedback = lastSetFeedback(movement);
++          // Hedefi olmayan harekette hem tekrar hem süre girilebilsin diye
++          // sayaç tekrarı, yanındaki küçük alan süreyi alıyor.
++          const showLooseDuration = !movement.targetType;
++          const stepField: "reps" | "duration" = plan.kind;
++          const stepDelta = plan.kind === "duration" ? 5 : 1;
+ 
+           return (
+             <View key={movement.movementId} style={styles.card}>
+@@ -578,12 +629,29 @@ export default function WorkoutSessionScreen() {
+ 
+               {!collapsed && (
+                 <>
+-                  {targetText && (
+-                    <View style={styles.targetChip}>
+-                      <Feather name="target" size={12} color={COLORS.accent} />
+-                      <Text style={styles.targetChipText}>Hedef: {targetText}</Text>
++                  <View style={styles.planRow}>
++                    <View style={{ flex: 1 }}>
++                      <Text style={styles.planHeadline}>{plan.headline}</Text>
++                      {plan.hint ? (
++                        <Text style={styles.planHint}>{plan.hint}</Text>
++                      ) : targetText ? (
++                        <Text style={styles.planHint}>Hedef: {targetText}</Text>
++                      ) : null}
+                     </View>
+-                  )}
++                    {plan.totalSets != null && (
++                      <View style={styles.dotRow}>
++                        {Array.from({ length: plan.totalSets }).map((_, i) => (
++                          <View
++                            key={i}
++                            style={[styles.setDot, i < movement.sets.length && styles.setDotDone]}
++                          />
++                        ))}
++                        {movement.sets.length > plan.totalSets && (
++                          <Text style={styles.setDotExtra}>+{movement.sets.length - plan.totalSets}</Text>
++                        )}
++                      </View>
++                    )}
++                  </View>
+ 
+                   {previousPerformance[movement.movementId] && (
+                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingBottom: 8, marginBottom: 10, borderBottomWidth: 1, borderBottomColor: COLORS.line }}>
+@@ -622,18 +690,45 @@ export default function WorkoutSessionScreen() {
+                     );
+                   })}
+ 
+-                  <View style={styles.inputRow}>
+-                    {showReps && (
+-                      <TextInput
+-                        style={styles.smallInput}
+-                        placeholder="Tekrar"
+-                        placeholderTextColor={COLORS.graphite}
+-                        keyboardType="number-pad"
+-                        value={inputs[movement.movementId]?.reps ?? ""}
+-                        onChangeText={(v) => updateInput(movement.movementId, "reps", v)}
+-                      />
+-                    )}
+-                    {showDuration && (
++                  {feedback && (
++                    <View style={styles.coachRow}>
++                      <Feather name="message-circle" size={12} color={COLORS.accent} />
++                      <Text style={styles.coachText}>{feedback}</Text>
++                    </View>
++                  )}
++
++                  <View style={styles.stepperRow}>
++                    <TouchableOpacity
++                      style={styles.stepButton}
++                      onPress={() => bumpValue(movement.movementId, stepField, -stepDelta)}
++                      activeOpacity={0.7}
++                    >
++                      <Feather name="minus" size={20} color={COLORS.ink} />
++                    </TouchableOpacity>
++
++                    <View style={styles.stepValueBox}>
++                      <TextInput
++                        style={styles.stepValue}
++                        placeholder="0"
++                        placeholderTextColor={COLORS.line}
++                        keyboardType="number-pad"
++                        value={inputs[movement.movementId]?.[stepField] ?? ""}
++                        onChangeText={(v) => updateInput(movement.movementId, stepField, v)}
++                      />
++                      <Text style={styles.stepUnit}>{plan.kind === "duration" ? "saniye" : "tekrar"}</Text>
++                    </View>
++
++                    <TouchableOpacity
++                      style={styles.stepButton}
++                      onPress={() => bumpValue(movement.movementId, stepField, stepDelta)}
++                      activeOpacity={0.7}
++                    >
++                      <Feather name="plus" size={20} color={COLORS.ink} />
++                    </TouchableOpacity>
++                  </View>
++
++                  <View style={styles.extraRow}>
++                    {showLooseDuration && (
+                       <TextInput
+                         style={styles.smallInput}
+                         placeholder="Süre (sn)"
+@@ -645,14 +740,14 @@ export default function WorkoutSessionScreen() {
+                     )}
+                     <TextInput
+                       style={styles.smallInput}
+-                      placeholder="Ek kg"
++                      placeholder="Ek kg (opsiyonel)"
+                       placeholderTextColor={COLORS.graphite}
+                       keyboardType="decimal-pad"
+                       value={inputs[movement.movementId]?.weight ?? ""}
+                       onChangeText={(v) => updateInput(movement.movementId, "weight", v)}
+                     />
+                   </View>
++
+                   <TouchableOpacity style={styles.saveButton} onPress={() => saveSet(movement.movementId)}>
+-                    <Text style={styles.saveButtonText}>Seti Kaydet</Text>
++                    <Text style={styles.saveButtonText}>{plan.setNumber}. Seti Kaydet</Text>
+                   </TouchableOpacity>
+                 </>
+               )}
+@@ -905,22 +1000,58 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
+     shadowRadius: 6,
+     elevation: 2,
+   },
+-  targetChip: {
+-    flexDirection: "row",
+-    alignItems: "center",
+-    gap: 6,
+-    alignSelf: "flex-start",
+-    backgroundColor: "rgba(34, 197, 94, 0.1)",
+-    paddingHorizontal: 10,
+-    paddingVertical: 5,
+-    borderRadius: 10,
+-
+-    marginBottom: 8,
+-  },
+-  targetChipText: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: COLORS.accent },
++  planRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
++  planHeadline: { fontFamily: "Inter_700Bold", fontSize: 15, color: COLORS.ink },
++  planHint: { fontFamily: "Inter_500Medium", fontSize: 12, color: COLORS.accent, marginTop: 2 },
++  dotRow: { flexDirection: "row", alignItems: "center", gap: 5 },
++  setDot: { width: 9, height: 9, borderRadius: 5, borderWidth: 1.5, borderColor: COLORS.line },
++  setDotDone: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
++  setDotExtra: { fontFamily: "Inter_600SemiBold", fontSize: 11, color: COLORS.accent, marginLeft: 2 },
++  coachRow: {
++    flexDirection: "row",
++    alignItems: "center",
++    gap: 6,
++    backgroundColor: "rgba(34, 197, 94, 0.08)",
++    borderRadius: 10,
++    paddingHorizontal: 10,
++    paddingVertical: 7,
++    marginTop: 8,
++  },
++  coachText: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: COLORS.accent, flex: 1 },
++  stepperRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12 },
++  stepButton: {
++    width: 52,
++    height: 56,
++    borderRadius: 14,
++    alignItems: "center",
++    justifyContent: "center",
++    backgroundColor: COLORS.paper,
++    borderWidth: 1,
++    borderColor: COLORS.line,
++  },
++  stepValueBox: {
++    flex: 1,
++    height: 56,
++    borderRadius: 14,
++    backgroundColor: COLORS.paper,
++    borderWidth: 1,
++    borderColor: COLORS.line,
++    alignItems: "center",
++    justifyContent: "center",
++  },
++  stepValue: {
++    fontFamily: "BebasNeue_400Regular",
++    fontSize: 30,
++    color: COLORS.ink,
++    padding: 0,
++    minWidth: 60,
++    textAlign: "center",
++  },
++  stepUnit: { fontFamily: "Inter_400Regular", fontSize: 10, color: COLORS.graphite, marginTop: -2 },
++  extraRow: { flexDirection: "row", gap: 8, marginTop: 8 },
+   setLineRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
+   setLine: { fontFamily: "Inter_500Medium", fontSize: 14, color: COLORS.ink },
+   setBadges: { flexDirection: "row", alignItems: "center", gap: 8 },
+@@ -940,7 +1071,6 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
+     paddingHorizontal: 8,
+     paddingVertical: 3,
+   },
+-  inputRow: { flexDirection: "row", gap: 8, marginTop: 8 },
+   smallInput: {
+     borderWidth: 1,
+     borderColor: COLORS.line,
