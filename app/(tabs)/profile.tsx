@@ -10,6 +10,7 @@ import { notificationsService, describeReminders } from "../../src/services/noti
 import { avatarService } from "../../src/services/avatar.service";
 import { Avatar } from "../../src/components/Avatar";
 import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
+import { useTabBarSpace } from "../../src/constants/layout";
 
 const LEVEL_LABELS: Record<string, string> = {
   beginner: "Başlangıç",
@@ -22,6 +23,7 @@ const REMINDER_HOURS = [6, 7, 8, 9, 12, 17, 18, 19, 20, 21, 22];
 export default function ProfileScreen() {
   const COLORS = useColors();
   const styles = getStyles(COLORS);
+  const tabBarSpace = useTabBarSpace();
   const session = useAuthStore((s) => s.session);
   const themePreference = useThemeStore((s) => s.preference);
   const setThemePreference = useThemeStore((s) => s.setPreference);
@@ -196,7 +198,7 @@ export default function ProfileScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: tabBarSpace }} showsVerticalScrollIndicator={false}>
       <View style={styles.headerRow}>
         <Text style={styles.header}>Profil</Text>
         {saving && <ActivityIndicator size="small" color={COLORS.accent} />}

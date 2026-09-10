@@ -9,6 +9,7 @@ import { useProgramDay } from "../../src/hooks/useProgramDay";
 import { ActiveSessionBanner } from "../../src/components/ActiveSessionBanner";
 import { Avatar } from "../../src/components/Avatar";
 import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
+import { useTabBarSpace } from "../../src/constants/layout";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const CARD_GAP = 12;
@@ -31,6 +32,7 @@ function daysSince(dateStr: string | null) {
 export default function HomeScreen() {
   const COLORS = useColors();
   const styles = getStyles(COLORS);
+  const tabBarSpace = useTabBarSpace();
   const session = useAuthStore((s) => s.session);
   const [profile, setProfile] = useState<any>(null);
   const [stats, setStats] = useState({ totalWorkouts: 0, totalSets: 0, mostTrainedCategory: "-" });
@@ -170,7 +172,7 @@ export default function HomeScreen() {
   const remindersOff = profile ? profile.notifications_enabled === false : false;
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: tabBarSpace }}>
       {loadError && (
         <TouchableOpacity onPress={loadData} style={styles.errorBanner}>
           <Text style={styles.errorBannerText}>Veriler yüklenemedi — tekrar denemek için dokun</Text>

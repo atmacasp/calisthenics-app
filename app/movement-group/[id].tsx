@@ -1,18 +1,19 @@
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, FlatList, StyleSheet, ActivityIndicator } from "react-native";
 import { useEffect, useMemo, useState } from "react";
 import { router, useLocalSearchParams, Stack } from "expo-router";
-import { Feather } from "@expo/vector-icons";
+import { StepCard } from "../../src/components/StepCard";
 import { movementsService } from "../../src/services/movements.service";
 import { progressService } from "../../src/services/progress.service";
 import { useAuthStore } from "../../src/store/authStore";
-import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
+import { themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 import type { MovementListItem, MovementSetLogMap } from "../../src/types/movements";
 import { areAllPrerequisitesMet, computeTargetProgress } from "../../src/utils/targetProgress";
+import { resolveStepStates } from "../../src/utils/progressionSteps";
 
 export default function MovementGroupScreen() {
   const COLORS = useColors();
   const styles = getStyles(COLORS);
-  const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
+  const { id, name, slug } = useLocalSearchParams<{ id: string; name: string; slug?: string }>();
   const userId = useAuthStore((s) => s.session?.user.id);
   const [movements, setMovements] = useState<MovementListItem[]>([]);
   const [setLogMap, setSetLogMap] = useState<MovementSetLogMap>({});
@@ -32,10 +33,27 @@ export default function MovementGroupScreen() {
       .finally(() => setLoading(false));
   }, [id, userId]);
 
-  const completedCount = useMemo(
-    () => movements.filter((m) => computeTargetProgress(m, setLogMap[m.id])?.met).length,
-    [movements, setLogMap]
-  );
+  /**
+   * Zincirin tamamı tek seferde çözülüyor: her basamağın ilerlemesi, kilidi ve
+   * görsel durumu. "Sıradaki" basamağı bulmak listenin bütününü görmeyi
+   * gerektirdiği için bu iş renderItem'a bırakılmıyor.
+   */
+  const steps = useMemo(() => {
+    const rows = movements.map((m) => {
+      const progress = computeTargetProgress(m, setLogMap[m.id]);
+      return {
+        movement: m,
+        progress,
+        done: progress?.met ?? false,
+        unlocked: areAllPrerequisitesMet(m.prerequisites ?? [], setLogMap),
+      };
+    });
+    const states = resolveStepStates(rows);
+    return rows.map((row, i) => ({ ...row, state: states[i] }));
+  }, [movements, setLogMap]);
+
+  const completedCount = steps.filter((s) => s.done).length;
+  const ratio = steps.length > 0 ? completedCount / steps.length : 0;
 
   if (loading) {
     return (
@@ -49,75 +67,54 @@ export default function MovementGroupScreen() {
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: true, title: name ?? "Progression" }} />
-      <View style={styles.headerContainer}>
+
+      <View style={styles.header}>
         <Text style={styles.headerSubtitle}>Basamakları sırayla tamamlayarak ilerle</Text>
-        {movements.length > 0 && (
-          <Text style={styles.headerCount}>
-            {completedCount} / {movements.length} basamak tamamlandı
-          </Text>
+        {steps.length > 0 && (
+          <>
+            <View style={styles.headerBarTrack}>
+              <View style={[styles.headerBarFill, { width: `${Math.round(ratio * 100)}%` }]} />
+            </View>
+            <Text style={styles.headerCount}>
+              {completedCount} / {steps.length} basamak tamamlandı
+            </Text>
+          </>
         )}
       </View>
+
       <FlatList
-        data={movements}
-        keyExtractor={(item) => item.id}
+        data={steps}
+        keyExtractor={(item) => item.movement.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         renderItem={({ item, index }) => {
-          const unlocked = areAllPrerequisitesMet(item.prerequisites ?? [], setLogMap);
-          const progress = computeTargetProgress(item, setLogMap[item.id]);
-          const done = progress?.met ?? false;
-          const isLast = index === movements.length - 1;
+          const { movement, progress, state } = item;
+          const isLast = index === steps.length - 1;
 
-          // Kilitli basamakta ilerleme çubuğu göstermiyoruz: henüz o basamağa
-          // çalışılmıyor, boş bir çubuk sadece gürültü olurdu.
-          const showBar = unlocked && !done && !!progress;
+          // Çubuk yalnızca üzerinde çalışılan basamakta: kilitli ya da bitmiş
+          // basamakta boş/dolu bir çubuk sadece gürültü olurdu.
+          const showBar = (state === "current" || state === "todo") && !!progress;
 
           return (
             <View>
-              <TouchableOpacity
-                style={styles.row}
-                activeOpacity={0.7}
-                onPress={() => router.push(`/movement/${item.id}`)}
-              >
-                <View
-                  style={[
-                    styles.stepCircle,
-                    !unlocked && styles.stepCircleLocked,
-                    done && styles.stepCircleDone,
-                  ]}
-                >
-                  {done ? (
-                    <Feather name="check" size={16} color={COLORS.onAccent} />
-                  ) : unlocked ? (
-                    <Text style={styles.stepNumber}>{index + 1}</Text>
-                  ) : (
-                    <Feather name="lock" size={14} color={COLORS.onAccent} />
-                  )}
-                </View>
-
-                <View style={styles.rowContent}>
-                  <Text style={styles.rowTitle}>{item.name}</Text>
-                  <Text style={[styles.rowMeta, done && styles.rowMetaDone]}>
-                    {done
-                      ? "Tamamlandı"
-                      : !unlocked
-                      ? "Ön koşul gerekiyor"
-                      : progress?.label ?? `Zorluk: ${item.difficulty_level}/10`}
-                  </Text>
-
-                  {showBar && (
-                    <>
-                      <View style={styles.barTrack}>
-                        <View style={[styles.barFill, { width: `${Math.round(progress!.ratio * 100)}%` }]} />
-                      </View>
-                      {progress!.detail && <Text style={styles.barDetail}>{progress!.detail}</Text>}
-                    </>
-                  )}
-                </View>
-
-                <Feather name="chevron-right" size={20} color={COLORS.graphite} />
-              </TouchableOpacity>
-              {!isLast && <View style={[styles.connector, done && styles.connectorDone]} />}
+              <StepCard
+                index={index}
+                name={movement.name}
+                imageUrl={movement.image_url}
+                groupSlug={slug}
+                state={state}
+                meta={
+                  state === "done"
+                    ? "Tamamlandı"
+                    : state === "locked"
+                    ? "Ön koşul gerekiyor"
+                    : progress?.label ?? `Zorluk: ${movement.difficulty_level}/10`
+                }
+                detail={progress?.detail}
+                ratio={showBar ? progress!.ratio : null}
+                onPress={() => router.push(`/movement/${movement.id}`)}
+              />
+              {!isLast && <View style={[styles.connector, state === "done" && styles.connectorDone]} />}
             </View>
           );
         }}
@@ -128,71 +125,29 @@ export default function MovementGroupScreen() {
 
 const getStyles = themedStyles((COLORS: ThemeColors) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.paper },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.paper },
-  headerContainer: {
-    paddingHorizontal: 22,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-  headerSubtitle: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 14,
-    color: COLORS.graphite,
-  },
-  headerCount: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 12,
-    color: COLORS.accent,
-    marginTop: 4,
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-  },
-  listContent: {
-    paddingHorizontal: 22,
-    paddingTop: 8,
-    paddingBottom: 40,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  stepCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.accent,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 14,
-  },
-  stepCircleLocked: { backgroundColor: COLORS.graphite },
-  stepCircleDone: { backgroundColor: COLORS.inverse },
-  stepNumber: { color: COLORS.onAccent, fontFamily: "Inter_700Bold", fontSize: 14 },
-  rowContent: { flex: 1 },
-  rowTitle: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: COLORS.ink },
-  rowMeta: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, marginTop: 2 },
-  rowMetaDone: { fontFamily: "Inter_600SemiBold", color: COLORS.accent },
-  barTrack: {
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: COLORS.line,
-    overflow: "hidden",
-    marginTop: 8,
-    marginRight: 8,
-  },
-  barFill: { height: 5, borderRadius: 3, backgroundColor: COLORS.accent },
-  barDetail: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.graphite, marginTop: 4 },
-  connector: { width: 2, height: 14, backgroundColor: COLORS.line, marginLeft: 32 },
-  connectorDone: { backgroundColor: COLORS.accent },
+    container: { flex: 1, backgroundColor: COLORS.paper },
+    center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.paper },
+    header: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 6 },
+    headerSubtitle: { fontFamily: "Inter_400Regular", fontSize: 14, color: COLORS.graphite },
+    headerBarTrack: {
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: COLORS.line,
+      overflow: "hidden",
+      marginTop: 12,
+    },
+    headerBarFill: { height: 6, borderRadius: 3, backgroundColor: COLORS.accent },
+    headerCount: {
+      fontFamily: "Inter_700Bold",
+      fontSize: 12,
+      color: COLORS.accent,
+      marginTop: 8,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+    },
+    listContent: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 44 },
+    // Kartların arasındaki dikey bağ: rozetin merkeziyle hizalı (14 + 30/2).
+    connector: { width: 2, height: 12, backgroundColor: COLORS.line, marginLeft: 29 },
+    connectorDone: { backgroundColor: COLORS.accent },
   })
 );

@@ -10,6 +10,7 @@ import { useWeightLog } from "../../src/hooks/useWeightLog";
 import { programsService } from "../../src/services/programs.service";
 import { EmptyState } from "../../src/components/EmptyState";
 import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
+import { useTabBarSpace } from "../../src/constants/layout";
 import type { ProgramAdherence } from "../../src/types/programs";
 
 const SEGMENTS = [
@@ -35,6 +36,7 @@ function barHeight(value: number, max: number) {
 export default function ProgressScreen() {
   const COLORS = useColors();
   const styles = getStyles(COLORS);
+  const tabBarSpace = useTabBarSpace();
   const session = useAuthStore((s) => s.session);
   const [segment, setSegment] = useState<(typeof SEGMENTS)[number]["key"]>("genel");
   const [loading, setLoading] = useState(true);
@@ -132,7 +134,7 @@ export default function ProgressScreen() {
   const recentLogs = weightLogs.slice(-8);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: tabBarSpace }} showsVerticalScrollIndicator={false}>
       <Text style={styles.header}>İlerleme</Text>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 16, marginBottom: 20 }}>

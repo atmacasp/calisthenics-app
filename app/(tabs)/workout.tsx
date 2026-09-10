@@ -10,6 +10,7 @@ import { useWorkoutStore } from "../../src/store/workoutStore";
 import { useProgramDay } from "../../src/hooks/useProgramDay";
 import { ActiveSessionBanner } from "../../src/components/ActiveSessionBanner";
 import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
+import { useTabBarSpace } from "../../src/constants/layout";
 import type { MovementSetLogMap, MovementWithGroupAndPrerequisites } from "../../src/types/movements";
 import { formatTarget, type TargetProgress } from "../../src/utils/targetProgress";
 import {
@@ -37,6 +38,7 @@ function TargetProgressBar({ progress }: { progress: TargetProgress }) {
 export default function WorkoutScreen() {
   const COLORS = useColors();
   const styles = getStyles(COLORS);
+  const tabBarSpace = useTabBarSpace();
   const userId = useAuthStore((s) => s.session?.user.id);
   const startSession = useWorkoutStore((s) => s.startSession);
   const addMovement = useWorkoutStore((s) => s.addMovement);
@@ -113,7 +115,7 @@ export default function WorkoutScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]} showsVerticalScrollIndicator={false}>
       <Text style={styles.title}>Antrenman</Text>
       <Text style={styles.subtitle}>Hazır olduğunda antrenmanına başla, ya da sıradaki hedeflerinden birine dokun.</Text>
 
@@ -265,7 +267,7 @@ export default function WorkoutScreen() {
 const getStyles = themedStyles((COLORS: ThemeColors) =>
   StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.paper },
-  content: { padding: 22, paddingTop: 48, paddingBottom: 60 },
+  content: { padding: 22, paddingTop: 48 },
   title: {
     fontFamily: "Inter_700Bold",
     fontSize: 26,

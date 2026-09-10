@@ -9,6 +9,7 @@ import { useAuthStore } from "../../src/store/authStore";
 import { areAllPrerequisitesMet, isTargetMet } from "../../src/utils/targetProgress";
 import type { MovementSetLogMap, MovementWithGroupAndPrerequisites } from "../../src/types/movements";
 import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
+import { useTabBarSpace } from "../../src/constants/layout";
 
 interface GroupProgress {
   completed: number;
@@ -21,6 +22,7 @@ interface GroupProgress {
 export default function LibraryScreen() {
   const COLORS = useColors();
   const styles = getStyles(COLORS);
+  const tabBarSpace = useTabBarSpace();
   const userId = useAuthStore((s) => s.session?.user.id);
   const [groups, setGroups] = useState<any[]>([]);
   const [movements, setMovements] = useState<MovementWithGroupAndPrerequisites[]>([]);
@@ -86,7 +88,7 @@ export default function LibraryScreen() {
         keyExtractor={(item) => item.id}
         numColumns={2}
         columnWrapperStyle={styles.row}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: tabBarSpace }]}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => {
           const p = progressByGroup[item.id] ?? { completed: 0, total: 0, nextName: null, nextLocked: false };
@@ -100,7 +102,15 @@ export default function LibraryScreen() {
               total={p.total}
               nextName={p.nextName}
               nextLocked={p.nextLocked}
-              onPress={() => router.push(`/movement-group/${item.id}?name=${encodeURIComponent(item.name)}`)}
+              // slug de taşınıyor: zincir ekranında fotoğrafı olmayan basamaklar
+              // kategorinin renk/ikon kimliğine düşsün.
+              onPress={() =>
+                router.push(
+                  `/movement-group/${item.id}?name=${encodeURIComponent(item.name)}&slug=${encodeURIComponent(
+                    item.slug ?? ""
+                  )}`
+                )
+              }
             />
           );
         }}
@@ -132,7 +142,6 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
   },
   listContent: {
     paddingHorizontal: 18,
-    paddingBottom: 90, // Tab bar arkasında kalmaması için geniş alt alan
     paddingTop: 8,
   },
   row: { gap: 12, marginBottom: 12 },
