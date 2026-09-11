@@ -3,6 +3,7 @@ import {
   DEFAULT_REST_SECONDS,
   MAX_REST_SECONDS,
   MISSED_TARGET_EXTRA_SECONDS,
+  finishNote,
   focusAfterSet,
   initialFocus,
   isMovementComplete,
@@ -223,6 +224,29 @@ describe("sessionHeadline", () => {
 
   it("hepsi bitince kutlar", () => {
     expect(sessionHeadline(sessionProgress([repsMovement("a", reps(15, 15, 15))]))).toBe("Tüm hedefler tamam");
+  });
+});
+
+describe("finishNote", () => {
+  it("hiç set yokken sessiz", () => {
+    expect(finishNote(sessionProgress([repsMovement("a", [])]))).toBeNull();
+  });
+
+  it("yarım oturumda bitirmeye izin verdiğini söyler", () => {
+    const movements = [repsMovement("a", reps(15, 15, 15)), repsMovement("b", reps(9))];
+    expect(finishNote(sessionProgress(movements))).toBe("1 hareket yarım · yine de bitirebilirsin");
+  });
+
+  it("hepsi tamamken girilen set sayısını söyler", () => {
+    const movements = [repsMovement("a", reps(15, 15, 15)), holdMovement("b", holds(50))];
+    expect(finishNote(sessionProgress(movements))).toBe("Hedeflerin hepsi tamam · 4 set");
+  });
+
+  it("tutmayan setler de sayıya girer", () => {
+    // "4 set girdin" derken tutmayanı saklamak yanlış olurdu.
+    expect(finishNote(sessionProgress([repsMovement("a", reps(15, 15, 15, 2))]))).toBe(
+      "Hedeflerin hepsi tamam · 4 set"
+    );
   });
 });
 

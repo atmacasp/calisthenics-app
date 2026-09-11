@@ -5,15 +5,16 @@ import { router, useLocalSearchParams, Stack } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../../src/store/authStore";
-import { useWorkoutStore, type LoggedSet, type SessionMovement } from "../../../src/store/workoutStore";
+import { useWorkoutStore, type SessionMovement } from "../../../src/store/workoutStore";
 import { workoutService } from "../../../src/services/workout.service";
 import { workoutsService } from "../../../src/services/workouts.service";
 import { progressService } from "../../../src/services/progress.service";
 import { movementsService } from "../../../src/services/movements.service";
 import { performanceService, type PreviousPerformance } from "../../../src/services/performance.service";
 import { computeFocusSuggestions, orderSuggestions } from "../../../src/utils/workoutSuggestions";
-import { buildSetPlan, lastSetFeedback, setValueRatio } from "../../../src/utils/setCoach";
+import { buildSetPlan } from "../../../src/utils/setCoach";
 import {
+  finishNote,
   focusAfterSet,
   initialFocus,
   restPlanFor,
@@ -21,21 +22,12 @@ import {
   sessionOutline,
   sessionProgress,
 } from "../../../src/utils/sessionFlow";
-import { SetChip } from "../../../src/components/SetChip";
+import { SessionMovementCard } from "../../../src/components/SessionMovementCard";
 import { RestBanner, type RestRequest } from "../../../src/components/RestBanner";
 import { COLORS, themedStyles, useColors, type ThemeColors } from "../../../src/constants/theme";
 import { formatTarget } from "../../../src/utils/targetProgress";
+import type { PersonalBest } from "../../../src/utils/setRecords";
 import { useSetRemoval } from "../../../src/hooks/useSetRemoval";
-
-interface PersonalBest {
-  maxReps: number;
-  maxDuration: number;
-  maxWeight: number;
-}
-
-// Bu ekranin set tipi store'daki LoggedSet ile birebir aynidir. Kopyasini tutmak
-// ikisinin zamanla ayrisip tip hatasi uretmesine yol acmisti; artik tek kaynak var.
-type SessionSet = LoggedSet;
 
 function sanitizeInteger(text: string) {
   return text.replace(/[^0-9]/g, "");
@@ -48,55 +40,6 @@ function sanitizeDecimal(text: string) {
     cleaned = parts[0] + "." + parts.slice(1).join("");
   }
   return cleaned;
-}
-
-/**
- * Bir hareketin bu antrenmandaki setlerini, antrenman öncesi kişisel rekorla
- * (baseline) karşılaştırarak sırayla tarar. Her metrik (tekrar/süre/ek kg) için
- * SADECE o metrikte hâlâ en yüksek değeri tutan TEK seti "rekor sahibi" işaretler.
- * Böylece bir set öncekini geçtiğinde rozet otomatik olarak yeni sete kayar,
- * aynı anda birden fazla set "Yeni Rekor!" göstermez.
- */
-function computeRecordHolderIds(sets: SessionSet[], baseline: PersonalBest): Set<string> {
-  let bestReps = baseline.maxReps;
-  let repsHolder: string | null = null;
-  let bestDuration = baseline.maxDuration;
-  let durationHolder: string | null = null;
-  let bestWeight = baseline.maxWeight;
-  let weightHolder: string | null = null;
-
-  for (const s of sets) {
-    if (s.reps != null && s.reps > bestReps) {
-      bestReps = s.reps;
-      repsHolder = s.id;
-    }
-    if (s.duration_seconds != null && s.duration_seconds > bestDuration) {
-      bestDuration = s.duration_seconds;
-      durationHolder = s.id;
-    }
-    if (s.added_weight_kg != null && s.added_weight_kg > bestWeight) {
-      bestWeight = s.added_weight_kg;
-      weightHolder = s.id;
-    }
-  }
-
-  return new Set([repsHolder, durationHolder, weightHolder].filter((x): x is string => !!x));
-}
-
-/** Bir setin, hareketin KENDİ hedefini karşılayıp karşılamadığını (anlık, tek set bazlı) kontrol eder. */
-function setMeetsOwnTarget(
-  s: SessionSet,
-  targetType: "reps_sets" | "duration" | null | undefined,
-  targetReps: number | null | undefined,
-  targetDurationSeconds: number | null | undefined
-): boolean {
-  if (targetType === "duration" && targetDurationSeconds) {
-    return (s.duration_seconds ?? 0) >= targetDurationSeconds;
-  }
-  if (targetType === "reps_sets" && targetReps) {
-    return (s.reps ?? 0) >= targetReps;
-  }
-  return false;
 }
 
 export default function WorkoutSessionScreen() {
@@ -129,7 +72,7 @@ export default function WorkoutSessionScreen() {
   const [notes, setNotes] = useState("");
   // Bu antrenman BAŞLAMADAN ÖNCEKİ kişisel rekorlar - antrenman süresince
   // değişmez, "hâlâ kimin en iyi olduğu" her render'da bu referansla yeniden
-  // hesaplanır (bkz. computeRecordHolderIds).
+  // hesaplanır (bkz. setRecords.computeRecordHolderIds).
   const [personalBests, setPersonalBests] = useState<Record<string, PersonalBest>>({});
   // "Geçen sefer" referansı: bu antrenman hariç, her hareketin en son bitmiş
   // antrenmandaki setleri.
@@ -312,6 +255,7 @@ export default function WorkoutSessionScreen() {
   };
 
   const totalLoggedSets = progress.loggedSets;
+  const note = finishNote(progress);
 
   const handleRemoveMovement = (movementId: string, name: string, setCount: number) => {
     const message =
@@ -529,236 +473,29 @@ export default function WorkoutSessionScreen() {
         )}
 
         {sessionMovements.map((movement, movementIndex) => {
-          const baseline = personalBests[movement.movementId] ?? { maxReps: 0, maxDuration: 0, maxWeight: 0 };
-          const recordHolderIds = computeRecordHolderIds(movement.sets, baseline);
-          const targetText = formatTarget({
-            target_type: movement.targetType ?? null,
-            target_sets: movement.targetSets ?? null,
-            target_reps: movement.targetReps ?? null,
-            target_duration_seconds: movement.targetDurationSeconds ?? null,
-          });
           const step = outline[movementIndex];
-          const collapsed = movement.movementId !== focusId;
-          const plan = buildSetPlan(movement);
-          const feedback = lastSetFeedback(movement);
-          // Hedefi olmayan harekette hem tekrar hem süre girilebilsin diye
-          // sayaç tekrarı, yanındaki küçük alan süreyi alıyor.
-          const showLooseDuration = !movement.targetType;
-          const stepField: "reps" | "duration" = plan.kind;
-          const stepDelta = plan.kind === "duration" ? 5 : 1;
-
           return (
-            <View
+            <SessionMovementCard
               key={movement.movementId}
-              style={[styles.card, step?.state === "done" && styles.cardDone, !collapsed && styles.cardFocused]}
-            >
-              <TouchableOpacity
-                style={styles.cardHeaderRow}
-                activeOpacity={0.7}
-                onPress={() => toggleFocus(movement.movementId)}
-              >
-                {/* Durum işareti chevron'un yerini aldı: hareketin bitip bitmediği
-                    kartı açmadan görünüyor, açık olan zaten tek. */}
-                <View
-                  style={[
-                    styles.stateDot,
-                    step?.state === "done" && styles.stateDotDone,
-                    step?.state === "current" && styles.stateDotCurrent,
-                  ]}
-                >
-                  {step?.state === "done" && <Feather name="check" size={12} color={COLORS.onAccent} />}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>{movement.name}</Text>
-                  {movement.groupName && <Text style={styles.cardCategory}>{movement.groupName}</Text>}
-                </View>
-                {collapsed && (
-                  <Text style={[styles.collapsedSummary, step?.state === "done" && styles.collapsedSummaryDone]}>
-                    {step?.requiredSets != null
-                      ? `${step.qualifiedSets}/${step.requiredSets} set`
-                      : movement.sets.length > 0
-                        ? `${movement.sets.length} set`
-                        : "Henüz set yok"}
-                  </Text>
-                )}
-                <TouchableOpacity
-                  hitSlop={10}
-                  style={{ marginLeft: 12 }}
-                  onPress={() => handleRemoveMovement(movement.movementId, movement.name, movement.sets.length)}
-                >
-                  <Feather name="trash-2" size={18} color={COLORS.graphite} />
-                </TouchableOpacity>
-              </TouchableOpacity>
-
-              {!collapsed && (
-                <>
-                  {/* Başlık satırı: solda kaçıncı set, sağda HEDEF ilerlemesi.
-                      İkisi farklı sayı - aynı kesirde gösterilince "Set 4/3"
-                      gibi saçma bir şey çıkıyordu. */}
-                  <View style={styles.planRow}>
-                    <Text style={styles.planHeadline}>{plan.setNumber}. SET</Text>
-                    {plan.requiredSets != null && plan.requiredSets > 1 && (
-                      <Text style={styles.planCounter}>
-                        {plan.qualifiedSets} / {plan.requiredSets} HEDEF SET
-                      </Text>
-                    )}
-                  </View>
-
-                  {plan.requiredSets != null && plan.requiredSets > 1 && (
-                    <View style={styles.planBarTrack}>
-                      <View
-                        style={[
-                          styles.planBarFill,
-                          { width: `${Math.round(Math.min(1, plan.qualifiedSets / plan.requiredSets) * 100)}%` },
-                        ]}
-                      />
-                    </View>
-                  )}
-
-                  {(plan.hint || targetText) && (
-                    <View style={styles.hintRow}>
-                      <Feather
-                        name={plan.targetComplete ? "check-circle" : "target"}
-                        size={12}
-                        color={COLORS.accent}
-                      />
-                      <Text style={styles.planHint}>{plan.hint ?? `Hedef: ${targetText}`}</Text>
-                    </View>
-                  )}
-
-                  {previousPerformance[movement.movementId] && (
-                    <View style={styles.previousRow}>
-                      <Feather name="rotate-ccw" size={12} color={COLORS.graphite} />
-                      <Text style={styles.previousText}>
-                        Geçen sefer: {previousPerformance[movement.movementId].summary}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Setler yatay şeritte: 11 setlik bir hareket ekranı aşağı
-                      doğru şişirmiyor, son setler de göz hizasında kalıyor. */}
-                  {movement.sets.length > 0 && (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.setStrip}
-                    >
-                      {movement.sets.map((s, i) => {
-                        const value = plan.kind === "duration" ? s.duration_seconds ?? null : s.reps ?? null;
-                        return (
-                          <SetChip
-                            key={s.id}
-                            index={i}
-                            value={value}
-                            unit={plan.kind === "duration" ? "sn" : "tekrar"}
-                            addedWeightKg={s.added_weight_kg}
-                            ratio={setValueRatio(value, plan.targetValue)}
-                            met={setMeetsOwnTarget(
-                              s,
-                              movement.targetType,
-                              movement.targetReps,
-                              movement.targetDurationSeconds
-                            )}
-                            isRecord={recordHolderIds.has(s.id)}
-                            onDelete={() =>
-                              confirmRemoveSet({
-                                setId: s.id,
-                                movementId: movement.movementId,
-                                setNumber: i + 1,
-                              })
-                            }
-                          />
-                        );
-                      })}
-                    </ScrollView>
-                  )}
-
-                  {feedback && (
-                    <View style={styles.coachRow}>
-                      <Feather name="message-circle" size={12} color={COLORS.accent} />
-                      <Text style={styles.coachText}>{feedback}</Text>
-                    </View>
-                  )}
-
-                  <View style={styles.stepperRow}>
-                    <TouchableOpacity
-                      style={styles.stepButton}
-                      onPress={() => bumpValue(movement.movementId, stepField, -stepDelta)}
-                      activeOpacity={0.7}
-                    >
-                      <Feather name="minus" size={20} color={COLORS.ink} />
-                    </TouchableOpacity>
-
-                    <View style={styles.stepValueBox}>
-                      <TextInput
-                        style={styles.stepValue}
-                        placeholder="0"
-                        placeholderTextColor={COLORS.line}
-                        keyboardType="number-pad"
-                        value={inputs[movement.movementId]?.[stepField] ?? ""}
-                        onChangeText={(v) => updateInput(movement.movementId, stepField, v)}
-                      />
-                      <Text style={styles.stepUnit}>{plan.kind === "duration" ? "saniye" : "tekrar"}</Text>
-                    </View>
-
-                    <TouchableOpacity
-                      style={styles.stepButton}
-                      onPress={() => bumpValue(movement.movementId, stepField, stepDelta)}
-                      activeOpacity={0.7}
-                    >
-                      <Feather name="plus" size={20} color={COLORS.ink} />
-                    </TouchableOpacity>
-
-                    {/* Değer girilmişse düğme onu gösteriyor: alan kapalıyken de
-                        "ek ağırlık var" bilgisi kaybolmuyor. */}
-                    <TouchableOpacity
-                      style={[styles.kgButton, !!inputs[movement.movementId]?.weight && styles.kgButtonActive]}
-                      onPress={() => toggleWeightField(movement.movementId)}
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        style={[styles.kgText, !!inputs[movement.movementId]?.weight && styles.kgTextActive]}
-                        numberOfLines={1}
-                      >
-                        {inputs[movement.movementId]?.weight
-                          ? `+${inputs[movement.movementId]?.weight}`
-                          : "KG"}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {(weightOpenIds.has(movement.movementId) || showLooseDuration) && (
-                    <View style={styles.extraRow}>
-                      {showLooseDuration && (
-                        <TextInput
-                          style={styles.smallInput}
-                          placeholder="Süre (sn)"
-                          placeholderTextColor={COLORS.graphite}
-                          keyboardType="number-pad"
-                          value={inputs[movement.movementId]?.duration ?? ""}
-                          onChangeText={(v) => updateInput(movement.movementId, "duration", v)}
-                        />
-                      )}
-                      {weightOpenIds.has(movement.movementId) && (
-                        <TextInput
-                          style={styles.smallInput}
-                          placeholder="Ek ağırlık (kg)"
-                          placeholderTextColor={COLORS.graphite}
-                          keyboardType="decimal-pad"
-                          autoFocus
-                          value={inputs[movement.movementId]?.weight ?? ""}
-                          onChangeText={(v) => updateInput(movement.movementId, "weight", v)}
-                        />
-                      )}
-                    </View>
-                  )}
-
-                  <TouchableOpacity style={styles.saveButton} onPress={() => saveSet(movement.movementId)}>
-                    <Text style={styles.saveButtonText}>{plan.setNumber}. SETİ KAYDET</Text>
-                  </TouchableOpacity>
-                </>
-              )}
-            </View>
+              movement={movement}
+              state={step?.state ?? "todo"}
+              requiredSets={step?.requiredSets ?? null}
+              qualifiedSets={step?.qualifiedSets ?? 0}
+              collapsed={movement.movementId !== focusId}
+              personalBest={personalBests[movement.movementId]}
+              previous={previousPerformance[movement.movementId]}
+              input={inputs[movement.movementId]}
+              weightOpen={weightOpenIds.has(movement.movementId)}
+              onToggle={() => toggleFocus(movement.movementId)}
+              onRemove={() => handleRemoveMovement(movement.movementId, movement.name, movement.sets.length)}
+              onChangeInput={(field, value) => updateInput(movement.movementId, field, value)}
+              onBump={(field, delta) => bumpValue(movement.movementId, field, delta)}
+              onToggleWeight={() => toggleWeightField(movement.movementId)}
+              onSave={() => saveSet(movement.movementId)}
+              onRemoveSet={(setId, setNumber) =>
+                confirmRemoveSet({ setId, movementId: movement.movementId, setNumber })
+              }
+            />
           );
         })}
 
@@ -782,8 +519,25 @@ export default function WorkoutSessionScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
+        {/* Bitirme kararının yanındaki tek satır. Yarım oturumda asıl mesaj
+            "yine de bitirebilirsin" - kullanıcı eksik hareket kalınca
+            bitirmeye çekiniyordu. */}
+        {note && (
+          <View style={styles.footerNote}>
+            <Feather
+              name={progress.complete ? "check-circle" : "info"}
+              size={12}
+              color={progress.complete ? COLORS.accent : COLORS.graphite}
+            />
+            <Text style={[styles.footerNoteText, progress.complete && styles.footerNoteDone]}>{note}</Text>
+          </View>
+        )}
         <TouchableOpacity
-          style={[styles.finishButton, totalLoggedSets === 0 && styles.cancelButton]}
+          style={[
+            styles.finishButton,
+            progress.complete && styles.finishButtonDone,
+            totalLoggedSets === 0 && styles.cancelButton,
+          ]}
           onPress={finishWorkout}
           activeOpacity={0.85}
         >
@@ -877,141 +631,6 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
   quickAccent: { width: 3, alignSelf: "stretch", borderRadius: 2, backgroundColor: COLORS.accent },
   quickName: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.ink },
   quickMeta: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.graphite, marginTop: 2 },
-  card: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  // Açık kart hafifçe öne çıkıyor, biten kart soluyor: göz hangi harekette
-  // olduğunu listeyi okumadan buluyor.
-  cardFocused: { borderWidth: 1, borderColor: COLORS.accent },
-  cardDone: { opacity: 0.72 },
-  cardHeaderRow: { flexDirection: "row", alignItems: "center" },
-  stateDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    marginRight: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1.5,
-    borderColor: COLORS.line,
-  },
-  stateDotCurrent: { borderColor: COLORS.accent, backgroundColor: `${COLORS.accent}22` },
-  stateDotDone: { borderColor: COLORS.accent, backgroundColor: COLORS.accent },
-  cardTitle: { fontFamily: "Inter_700Bold", fontSize: 17, color: COLORS.ink },
-  cardCategory: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, marginTop: 1 },
-  collapsedSummary: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: COLORS.graphite },
-  collapsedSummaryDone: { color: COLORS.accent },
-  planRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 12 },
-  planHeadline: {
-    fontFamily: "BebasNeue_400Regular",
-    fontSize: 26,
-    lineHeight: 30,
-    letterSpacing: 0.5,
-    color: COLORS.ink,
-  },
-  planCounter: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 11,
-    letterSpacing: 0.5,
-    color: COLORS.graphite,
-  },
-  planBarTrack: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: COLORS.line,
-    overflow: "hidden",
-    marginTop: 6,
-  },
-  planBarFill: { height: 6, borderRadius: 3, backgroundColor: COLORS.accent },
-  hintRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },
-  planHint: { flex: 1, fontFamily: "Inter_500Medium", fontSize: 12, color: COLORS.accent },
-  previousRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.line,
-  },
-  previousText: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite },
-  setStrip: { flexDirection: "row", gap: 8, paddingVertical: 12, paddingRight: 4 },
-  kgButton: {
-    minWidth: 46,
-    height: 56,
-    paddingHorizontal: 8,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.paper,
-    borderWidth: 1,
-    borderColor: COLORS.line,
-  },
-  kgButtonActive: { borderColor: COLORS.accent },
-  kgText: { fontFamily: "Inter_700Bold", fontSize: 12, color: COLORS.graphite },
-  kgTextActive: { color: COLORS.accent },
-  coachRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(34, 197, 94, 0.08)",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    marginTop: 8,
-  },
-  coachText: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: COLORS.accent, flex: 1 },
-  stepperRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 },
-  stepButton: {
-    width: 48,
-    height: 56,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.paper,
-    borderWidth: 1,
-    borderColor: COLORS.line,
-  },
-  stepValueBox: {
-    flex: 1,
-    height: 56,
-    borderRadius: 14,
-    backgroundColor: COLORS.paper,
-    borderWidth: 1,
-    borderColor: COLORS.line,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stepValue: {
-    fontFamily: "BebasNeue_400Regular",
-    fontSize: 30,
-    color: COLORS.ink,
-    padding: 0,
-    minWidth: 60,
-    textAlign: "center",
-  },
-  stepUnit: { fontFamily: "Inter_400Regular", fontSize: 10, color: COLORS.graphite, marginTop: -2 },
-  extraRow: { flexDirection: "row", gap: 8, marginTop: 8 },
-  smallInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: COLORS.line,
-    borderRadius: 8,
-    padding: 8,
-    backgroundColor: COLORS.paper,
-    color: COLORS.ink,
-    fontFamily: "Inter_400Regular",
-  },
-  saveButton: { backgroundColor: COLORS.accent, padding: 12, borderRadius: 10, marginTop: 10 },
-  saveButtonText: { color: COLORS.onAccent, textAlign: "center", fontFamily: "Inter_700Bold", fontSize: 14 },
   addButton: {
     borderWidth: 1,
     borderColor: COLORS.accent,
@@ -1043,7 +662,13 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
     paddingTop: 12,
     paddingBottom: 20,
   },
+  footerNote: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 },
+  footerNoteText: { flex: 1, fontFamily: "Inter_500Medium", fontSize: 12, color: COLORS.graphite },
+  footerNoteDone: { color: COLORS.accent },
   finishButton: { backgroundColor: COLORS.inverse, borderRadius: 16, paddingVertical: 16 },
+  // Hedefler tamamlanınca düğme vurgu rengine geçiyor: bitirmek artık
+  // "vazgeçmek" değil, yapılacak şey.
+  finishButtonDone: { backgroundColor: COLORS.accent },
   finishButtonText: { color: COLORS.onAccent, textAlign: "center", fontFamily: "Inter_700Bold", fontSize: 16 },
   cancelButton: { backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.line },
   cancelButtonText: { color: COLORS.graphite },

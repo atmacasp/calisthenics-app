@@ -219,6 +219,20 @@ export function sessionHeadline(progress: SessionProgress): string {
 }
 
 /**
+ * "Bitir" düğmesinin üstündeki tek satır: oturumu ŞİMDİ bitirmek ne demek.
+ *
+ * Yarım kalmış oturumda asıl söylenmek istenen "yine de bitirebilirsin" -
+ * kullanıcı eksik hareket kalınca bitirmeye çekiniyor, oysa her set birikiyor.
+ * Hiç set yokken sessiz: orada düğme zaten "İptal Et" diyor.
+ */
+export function finishNote(progress: SessionProgress): string | null {
+  if (progress.loggedSets === 0) return null;
+  if (progress.complete) return `Hedeflerin hepsi tamam · ${progress.loggedSets} set`;
+  const remaining = progress.totalMovements - progress.completedMovements;
+  return `${remaining} hareket yarım · yine de bitirebilirsin`;
+}
+
+/**
  * Dinlenme süresi ve bittiğinde ne yapılacağı.
  *
  * İki kural var:
