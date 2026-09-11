@@ -12,6 +12,8 @@ import { progressService } from "../../../src/services/progress.service";
 import { movementsService } from "../../../src/services/movements.service";
 import { performanceService, type PreviousPerformance } from "../../../src/services/performance.service";
 import { computeFocusSuggestions, orderSuggestions } from "../../../src/utils/workoutSuggestions";
+import { buildSetPlan, lastSetFeedback, setValueRatio } from "../../../src/utils/setCoach";
+import { SetChip } from "../../../src/components/SetChip";
 import { COLORS, themedStyles, useColors, type ThemeColors } from "../../../src/constants/theme";
 import { formatTarget } from "../../../src/utils/targetProgress";
 import { useSetRemoval } from "../../../src/hooks/useSetRemoval";
@@ -115,6 +117,10 @@ export default function WorkoutSessionScreen() {
   const [restVisible, setRestVisible] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(96);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+  // Ek ağırlık alanı varsayılan olarak KAPALI: calisthenics'te setlerin çoğu
+  // vücut ağırlığıyla. Alan hep açık durduğunda ekranın üçte birini boş bir
+  // kutu yiyordu; şimdi sayacın yanındaki KG düğmesi açıyor.
+  const [weightOpenIds, setWeightOpenIds] = useState<Set<string>>(new Set());
   const [notes, setNotes] = useState("");
   // Bu antrenman BAŞLAMADAN ÖNCEKİ kişisel rekorlar - antrenman süresince
   // değişmez, "hâlâ kimin en iyi olduğu" her render'da bu referansla yeniden
@@ -130,6 +136,10 @@ export default function WorkoutSessionScreen() {
   >([]);
   const [lastMovements, setLastMovements] = useState<SessionMovement[]>([]);
   const quickPicksLoaded = useRef(false);
+  // Hangi hareket için kaçıncı sette reçete doldurulduğu. Set sayısı her
+  // değiştiğinde bir sonraki setin önerisi bir kez yazılır; arada kullanıcı ne
+  // yazarsa o kalır.
+  const seededSetCount = useRef<Record<string, number>>({});
   const intervalRef = useRef<any>(null);
   // Sayaç kendiliğinden mi bitti, kullanıcı mı atladı - titreşim için ayırt ediliyor.
   const restWasRunning = useRef(false);
@@ -289,6 +299,56 @@ export default function WorkoutSessionScreen() {
       if (next.has(movementId)) next.delete(movementId);
       else next.add(movementId);
       return next;
+    });
+  };
+
+  const toggleWeightField = (movementId: string) => {
+    setWeightOpenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(movementId)) next.delete(movementId);
+      else next.add(movementId);
+      return next;
+    });
+  };
+
+  /**
+   * Sıradaki setin önerisini giriş alanına yazar. Ekran artık boş bir form değil,
+   * "şimdi şu kadar yap" diyen bir reçete; kullanıcı isterse üstüne yazıyor.
+   * Ek ağırlık bilerek korunuyor - genelde setten sete değişmiyor.
+   */
+  useEffect(() => {
+    const pending = sessionMovements.filter(
+      (m) => seededSetCount.current[m.movementId] !== m.sets.length
+    );
+    if (pending.length === 0) return;
+
+    pending.forEach((m) => {
+      seededSetCount.current[m.movementId] = m.sets.length;
+    });
+
+    setInputs((prev) => {
+      const next = { ...prev };
+      pending.forEach((m) => {
+        const plan = buildSetPlan(m);
+        const current = prev[m.movementId] ?? { reps: "", duration: "", weight: "" };
+        next[m.movementId] = {
+          reps: plan.kind === "reps" ? plan.prefill : current.reps,
+          duration: plan.kind === "duration" ? plan.prefill : current.duration,
+          weight: current.weight,
+        };
+      });
+      return next;
+    });
+  }, [sessionMovements]);
+
+  /** Sayaç butonları: tekrar birer birer, süre beşer beşer değişiyor. */
+  const bumpValue = (movementId: string, field: "reps" | "duration", delta: number) => {
+    setInputs((prev) => {
+      const current = prev[movementId] ?? { reps: "", duration: "", weight: "" };
+      const parsed = parseInt(current[field] || "0", 10);
+      const base = Number.isNaN(parsed) ? 0 : parsed;
+      const value = Math.max(0, base + delta);
+      return { ...prev, [movementId]: { ...current, [field]: value > 0 ? String(value) : "" } };
     });
   };
 
@@ -542,8 +602,13 @@ export default function WorkoutSessionScreen() {
             target_duration_seconds: movement.targetDurationSeconds ?? null,
           });
           const collapsed = collapsedIds.has(movement.movementId);
-          const showDuration = movement.targetType !== "reps_sets";
-          const showReps = movement.targetType !== "duration";
+          const plan = buildSetPlan(movement);
+          const feedback = lastSetFeedback(movement);
+          // Hedefi olmayan harekette hem tekrar hem süre girilebilsin diye
+          // sayaç tekrarı, yanındaki küçük alan süreyi alıyor.
+          const showLooseDuration = !movement.targetType;
+          const stepField: "reps" | "duration" = plan.kind;
+          const stepDelta = plan.kind === "duration" ? 5 : 1;
 
           return (
             <View key={movement.movementId} style={styles.card}>
@@ -578,82 +643,169 @@ export default function WorkoutSessionScreen() {
 
               {!collapsed && (
                 <>
-                  {targetText && (
-                    <View style={styles.targetChip}>
-                      <Feather name="target" size={12} color={COLORS.accent} />
-                      <Text style={styles.targetChipText}>Hedef: {targetText}</Text>
+                  {/* Başlık satırı: solda kaçıncı set, sağda HEDEF ilerlemesi.
+                      İkisi farklı sayı - aynı kesirde gösterilince "Set 4/3"
+                      gibi saçma bir şey çıkıyordu. */}
+                  <View style={styles.planRow}>
+                    <Text style={styles.planHeadline}>{plan.setNumber}. SET</Text>
+                    {plan.requiredSets != null && plan.requiredSets > 1 && (
+                      <Text style={styles.planCounter}>
+                        {plan.qualifiedSets} / {plan.requiredSets} HEDEF SET
+                      </Text>
+                    )}
+                  </View>
+
+                  {plan.requiredSets != null && plan.requiredSets > 1 && (
+                    <View style={styles.planBarTrack}>
+                      <View
+                        style={[
+                          styles.planBarFill,
+                          { width: `${Math.round(Math.min(1, plan.qualifiedSets / plan.requiredSets) * 100)}%` },
+                        ]}
+                      />
+                    </View>
+                  )}
+
+                  {(plan.hint || targetText) && (
+                    <View style={styles.hintRow}>
+                      <Feather
+                        name={plan.targetComplete ? "check-circle" : "target"}
+                        size={12}
+                        color={COLORS.accent}
+                      />
+                      <Text style={styles.planHint}>{plan.hint ?? `Hedef: ${targetText}`}</Text>
                     </View>
                   )}
 
                   {previousPerformance[movement.movementId] && (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingBottom: 8, marginBottom: 10, borderBottomWidth: 1, borderBottomColor: COLORS.line }}>
+                    <View style={styles.previousRow}>
                       <Feather name="rotate-ccw" size={12} color={COLORS.graphite} />
-                      <Text style={{ fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, flex: 1 }}>
+                      <Text style={styles.previousText}>
                         Geçen sefer: {previousPerformance[movement.movementId].summary}
                       </Text>
                     </View>
                   )}
 
-                  {movement.sets.map((s, i) => {
-                    const metTarget = setMeetsOwnTarget(
-                      s,
-                      movement.targetType,
-                      movement.targetReps,
-                      movement.targetDurationSeconds
-                    );
-                    return (
-                      <View key={s.id} style={styles.setLineRow}>
-                        <Text style={styles.setLine}>
-                          Set {i + 1}: {[s.reps ? `${s.reps} tekrar` : null, s.duration_seconds ? `${s.duration_seconds} sn` : null, s.added_weight_kg ? `+${s.added_weight_kg} kg` : null].filter(Boolean).join(" · ")}
-                        </Text>
-                        <View style={styles.setBadges}>
-                          {metTarget ? (
-                            <View style={styles.targetMetBadge}>
-                              <Feather name="check" size={12} color={COLORS.graphite} />
-                              <Text style={styles.targetMetBadgeText}>Hedef</Text>
-                            </View>
-                          ) : null}
-                          {recordHolderIds.has(s.id) && <Text style={styles.prBadge}>🏆 Yeni Rekor!</Text>}
-                          <TouchableOpacity hitSlop={8} onPress={() => confirmRemoveSet({ setId: s.id, movementId: movement.movementId, setNumber: i + 1 })}>
-                            <Feather name="x" size={14} color={COLORS.graphite} />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    );
-                  })}
+                  {/* Setler yatay şeritte: 11 setlik bir hareket ekranı aşağı
+                      doğru şişirmiyor, son setler de göz hizasında kalıyor. */}
+                  {movement.sets.length > 0 && (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.setStrip}
+                    >
+                      {movement.sets.map((s, i) => {
+                        const value = plan.kind === "duration" ? s.duration_seconds ?? null : s.reps ?? null;
+                        return (
+                          <SetChip
+                            key={s.id}
+                            index={i}
+                            value={value}
+                            unit={plan.kind === "duration" ? "sn" : "tekrar"}
+                            addedWeightKg={s.added_weight_kg}
+                            ratio={setValueRatio(value, plan.targetValue)}
+                            met={setMeetsOwnTarget(
+                              s,
+                              movement.targetType,
+                              movement.targetReps,
+                              movement.targetDurationSeconds
+                            )}
+                            isRecord={recordHolderIds.has(s.id)}
+                            onDelete={() =>
+                              confirmRemoveSet({
+                                setId: s.id,
+                                movementId: movement.movementId,
+                                setNumber: i + 1,
+                              })
+                            }
+                          />
+                        );
+                      })}
+                    </ScrollView>
+                  )}
 
-                  <View style={styles.inputRow}>
-                    {showReps && (
+                  {feedback && (
+                    <View style={styles.coachRow}>
+                      <Feather name="message-circle" size={12} color={COLORS.accent} />
+                      <Text style={styles.coachText}>{feedback}</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.stepperRow}>
+                    <TouchableOpacity
+                      style={styles.stepButton}
+                      onPress={() => bumpValue(movement.movementId, stepField, -stepDelta)}
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="minus" size={20} color={COLORS.ink} />
+                    </TouchableOpacity>
+
+                    <View style={styles.stepValueBox}>
                       <TextInput
-                        style={styles.smallInput}
-                        placeholder="Tekrar"
-                        placeholderTextColor={COLORS.graphite}
+                        style={styles.stepValue}
+                        placeholder="0"
+                        placeholderTextColor={COLORS.line}
                         keyboardType="number-pad"
-                        value={inputs[movement.movementId]?.reps ?? ""}
-                        onChangeText={(v) => updateInput(movement.movementId, "reps", v)}
+                        value={inputs[movement.movementId]?.[stepField] ?? ""}
+                        onChangeText={(v) => updateInput(movement.movementId, stepField, v)}
                       />
-                    )}
-                    {showDuration && (
-                      <TextInput
-                        style={styles.smallInput}
-                        placeholder="Süre (sn)"
-                        placeholderTextColor={COLORS.graphite}
-                        keyboardType="number-pad"
-                        value={inputs[movement.movementId]?.duration ?? ""}
-                        onChangeText={(v) => updateInput(movement.movementId, "duration", v)}
-                      />
-                    )}
-                    <TextInput
-                      style={styles.smallInput}
-                      placeholder="Ek kg"
-                      placeholderTextColor={COLORS.graphite}
-                      keyboardType="decimal-pad"
-                      value={inputs[movement.movementId]?.weight ?? ""}
-                      onChangeText={(v) => updateInput(movement.movementId, "weight", v)}
-                    />
+                      <Text style={styles.stepUnit}>{plan.kind === "duration" ? "saniye" : "tekrar"}</Text>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.stepButton}
+                      onPress={() => bumpValue(movement.movementId, stepField, stepDelta)}
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="plus" size={20} color={COLORS.ink} />
+                    </TouchableOpacity>
+
+                    {/* Değer girilmişse düğme onu gösteriyor: alan kapalıyken de
+                        "ek ağırlık var" bilgisi kaybolmuyor. */}
+                    <TouchableOpacity
+                      style={[styles.kgButton, !!inputs[movement.movementId]?.weight && styles.kgButtonActive]}
+                      onPress={() => toggleWeightField(movement.movementId)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[styles.kgText, !!inputs[movement.movementId]?.weight && styles.kgTextActive]}
+                        numberOfLines={1}
+                      >
+                        {inputs[movement.movementId]?.weight
+                          ? `+${inputs[movement.movementId]?.weight}`
+                          : "KG"}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
+
+                  {(weightOpenIds.has(movement.movementId) || showLooseDuration) && (
+                    <View style={styles.extraRow}>
+                      {showLooseDuration && (
+                        <TextInput
+                          style={styles.smallInput}
+                          placeholder="Süre (sn)"
+                          placeholderTextColor={COLORS.graphite}
+                          keyboardType="number-pad"
+                          value={inputs[movement.movementId]?.duration ?? ""}
+                          onChangeText={(v) => updateInput(movement.movementId, "duration", v)}
+                        />
+                      )}
+                      {weightOpenIds.has(movement.movementId) && (
+                        <TextInput
+                          style={styles.smallInput}
+                          placeholder="Ek ağırlık (kg)"
+                          placeholderTextColor={COLORS.graphite}
+                          keyboardType="decimal-pad"
+                          autoFocus
+                          value={inputs[movement.movementId]?.weight ?? ""}
+                          onChangeText={(v) => updateInput(movement.movementId, "weight", v)}
+                        />
+                      )}
+                    </View>
+                  )}
+
                   <TouchableOpacity style={styles.saveButton} onPress={() => saveSet(movement.movementId)}>
-                    <Text style={styles.saveButtonText}>Seti Kaydet</Text>
+                    <Text style={styles.saveButtonText}>{plan.setNumber}. SETİ KAYDET</Text>
                   </TouchableOpacity>
                 </>
               )}
@@ -809,26 +961,97 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
   cardTitle: { fontFamily: "Inter_700Bold", fontSize: 17, color: COLORS.ink },
   cardCategory: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, marginTop: 1 },
   collapsedSummary: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: COLORS.graphite },
-  targetChip: {
+  planRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 12 },
+  planHeadline: {
+    fontFamily: "BebasNeue_400Regular",
+    fontSize: 26,
+    lineHeight: 30,
+    letterSpacing: 0.5,
+    color: COLORS.ink,
+  },
+  planCounter: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 11,
+    letterSpacing: 0.5,
+    color: COLORS.graphite,
+  },
+  planBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.line,
+    overflow: "hidden",
+    marginTop: 6,
+  },
+  planBarFill: { height: 6, borderRadius: 3, backgroundColor: COLORS.accent },
+  hintRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },
+  planHint: { flex: 1, fontFamily: "Inter_500Medium", fontSize: 12, color: COLORS.accent },
+  previousRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    alignSelf: "flex-start",
-    backgroundColor: "rgba(34, 197, 94, 0.1)",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-
-    marginBottom: 8,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.line,
   },
-  targetChipText: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: COLORS.accent },
-  setLineRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
-  setLine: { fontFamily: "Inter_500Medium", fontSize: 14, color: COLORS.ink },
-  setBadges: { flexDirection: "row", alignItems: "center", gap: 8 },
-  targetMetBadge: { flexDirection: "row", alignItems: "center", gap: 3 },
-  targetMetBadgeText: { fontFamily: "Inter_700Bold", fontSize: 11, color: COLORS.graphite },
-  prBadge: { fontFamily: "Inter_700Bold", fontSize: 12, color: COLORS.accent },
-  inputRow: { flexDirection: "row", gap: 8, marginTop: 8 },
+  previousText: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite },
+  setStrip: { flexDirection: "row", gap: 8, paddingVertical: 12, paddingRight: 4 },
+  kgButton: {
+    minWidth: 46,
+    height: 56,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.paper,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+  },
+  kgButtonActive: { borderColor: COLORS.accent },
+  kgText: { fontFamily: "Inter_700Bold", fontSize: 12, color: COLORS.graphite },
+  kgTextActive: { color: COLORS.accent },
+  coachRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(34, 197, 94, 0.08)",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginTop: 8,
+  },
+  coachText: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: COLORS.accent, flex: 1 },
+  stepperRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 },
+  stepButton: {
+    width: 48,
+    height: 56,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.paper,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+  },
+  stepValueBox: {
+    flex: 1,
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: COLORS.paper,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepValue: {
+    fontFamily: "BebasNeue_400Regular",
+    fontSize: 30,
+    color: COLORS.ink,
+    padding: 0,
+    minWidth: 60,
+    textAlign: "center",
+  },
+  stepUnit: { fontFamily: "Inter_400Regular", fontSize: 10, color: COLORS.graphite, marginTop: -2 },
+  extraRow: { flexDirection: "row", gap: 8, marginTop: 8 },
   smallInput: {
     flex: 1,
     borderWidth: 1,

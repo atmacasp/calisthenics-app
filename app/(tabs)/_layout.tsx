@@ -2,43 +2,57 @@ import { View, StyleSheet, Platform } from "react-native";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TAB_BAR_HEIGHT } from "../../src/constants/layout";
 import { useColors, useResolvedScheme } from "../../src/constants/theme";
 
+/** İçeriğin bar'ın altına girerken eridiği geçiş bandının yüksekliği. */
+const FADE_HEIGHT = 12;
+
 /**
  * Tab bar'ın zemini.
  *
- * iOS'ta BlurView doğrudan arkasındaki içeriği bulanıklaştırır. Android'de SDK
- * 55'ten beri "doğru" yol içeriği BlurTargetView ile sarmak, ama tab navigator'ın
- * içeriği bizim elimizde olmadığı için (bar kendi kendini bulanıklaştırırdı)
- * eski dimezis yöntemini kullanıyoruz - Android 12+ gerektiriyor.
+ * iOS: BlurView arkasındaki içeriği doğrudan bulanıklaştırıyor, gerçek buzlu cam.
  *
- * Blur tutmazsa Android sessizce "yarı saydam zemin"e düşüyor - ilk denemede
- * olan buydu, arkadaki kart yazıları bar'ın içinden okunuyordu. Bu yüzden
- * üstteki ton katının opaklığı platforma göre ayrı: iOS'ta blur garanti
- * olduğu için hafif (%45) kalıp buzlu cam etkisini bozmuyor; Android'de
- * garanti olmadığı için kalın (%92) - blur çalışırsa arkadaki renkler
- * yumuşakça sızar, çalışmazsa yazı geçirmeyen mat bir panel kalır.
- * İki durumda da kasıtlı görünüyor, hiçbir durumda içerik okunmuyor.
+ * Android: expo-blur 57'de gerçek blur için bulanıklaştırılacak içeriğin
+ * <BlurTargetView> ile sarılıp ref'inin BlurView'a `blurTarget` olarak
+ * verilmesi ŞART - BlurView de o ağacın DIŞINDA, kardeşi olarak durmalı.
+ * Tab navigator'da bu yapı kurulamıyor: sarmalayıcının içerikle bar'ın arasına
+ * girmesi gerekiyor, React Navigation ise böyle bir nokta vermiyor. blurTarget
+ * olmadan kütüphane blurMethod'u ne olursa olsun sessizce "none"a düşüyor ve
+ * geriye yarı saydam bir zemin kalıyor - arkadaki kart yazıları okunuyordu.
+ *
+ * Bu yüzden Android'de blur denemesini tamamen bırakıp mat bir panel çiziyoruz.
+ * Şeffaflık hissi üstteki gradyanla korunuyor: içerik bar'a girerken keskin
+ * kesilmek yerine birkaç piksel boyunca eriyor. Kasıtlı görünüyor, ucuz duruyor.
  */
-const TINT_ALPHA = Platform.OS === "ios" ? "73" : "EB"; // %45 / %92
-
 function TabBarBackground() {
   const COLORS = useColors();
   const scheme = useResolvedScheme();
 
+  if (Platform.OS !== "ios") {
+    return (
+      <View style={StyleSheet.absoluteFill}>
+        {/* Hex8 şart: "transparent" Android'de gri bir bant bırakıyor. */}
+        <LinearGradient
+          colors={[`${COLORS.paper}00`, COLORS.paper]}
+          style={styles.fade}
+          pointerEvents="none"
+        />
+        <View style={[styles.panel, { backgroundColor: COLORS.paper }]} />
+      </View>
+    );
+  }
+
   return (
     <View style={StyleSheet.absoluteFill}>
       <BlurView
-        intensity={Platform.OS === "ios" ? 60 : 100}
+        intensity={60}
         tint={scheme === "dark" ? "dark" : "light"}
-        // Android'e özel; iOS'ta yok sayılıyor. SDK 31+ varyantı bazı
-        // cihazlarda hiç devreye girmiyordu, klasik dimezis daha güvenli.
-        blurMethod="dimezisBlurView"
         style={StyleSheet.absoluteFill}
       />
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: `${COLORS.paper}${TINT_ALPHA}` }]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: `${COLORS.paper}73` }]} />
       <View style={[styles.hairline, { backgroundColor: COLORS.line }]} />
     </View>
   );
@@ -66,7 +80,9 @@ export default function TabsLayout() {
           // vardı ve güvenli alan bar'ın dışında ayrı bir şerit olarak kalıyordu -
           // koyu temada o şerit göze batıyordu.
           height: TAB_BAR_HEIGHT + insets.bottom,
-          paddingTop: 8,
+          // İkonlar geçiş bandının altından başlasın; yoksa gradyanın yarı
+          // saydam olduğu şeritte ikonun tepesiyle arkadaki içerik çakışıyor.
+          paddingTop: FADE_HEIGHT + 2,
           paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
         },
         tabBarActiveTintColor: COLORS.accent,
@@ -125,4 +141,6 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   hairline: { position: "absolute", top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth },
+  fade: { position: "absolute", top: 0, left: 0, right: 0, height: FADE_HEIGHT },
+  panel: { position: "absolute", top: FADE_HEIGHT, left: 0, right: 0, bottom: 0 },
 });
