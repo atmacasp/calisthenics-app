@@ -55,7 +55,7 @@ export const movementsService = {
       .select(
         `
         *,
-        movement_groups(name),
+        movement_groups(name, slug),
         prerequisites:movement_prerequisites!movement_prerequisites_movement_id_fkey(${PREREQUISITE_SELECT})
       `
       )

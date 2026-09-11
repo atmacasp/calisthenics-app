@@ -32,3 +32,31 @@ SUPABASE_DB_URL, Dashboard > Connect > Session pooler URI'sidir ve repo dışın
 Yeni bir RPC (SQL fonksiyonu) eklendiğinde src/types/database.types.ts'teki
 Functions bloğuna da yazılmalı - supabase istemcisi Database tipiyle kurulu
 olduğu için fonksiyon adları tipli; eksikse supabase.rpc(...) typecheck'te patlar.
+
+# Görseller (kategori ve hareket fotoğrafları)
+
+Fotoğraflar Supabase Storage'daki public bucket'ta, tek klasörde durur:
+
+    <kategori-slug>.jpg              -> movement_groups.image_url (kütüphane kartı)
+    <kategori-slug>-<order_index>.jpg -> movements.image_url (progression basamağı)
+
+Kompozisyon 2:1 yatay ve sporcu SAĞ tarafta olmalı: kartta görselin sol yarısı
+zemine eriyen bir geçişin altında kalıyor, ortaya konan özne yarısı kesik
+görünüyor.
+
+Bir kategorinin hareket görselleri yüklendikten sonra tek komutla bağlanır
+(base URL elle yazılmaz, mevcut bir kategori görselinden türetilir; sondaki
+?v=<epoch> CDN önbelleğini kırar):
+
+    psql "$SUPABASE_DB_URL" -c "
+    with base as (
+      select regexp_replace(split_part(image_url, '?', 1), '[^/]+$', '') as prefix
+      from movement_groups where image_url is not null limit 1
+    )
+    update movements m
+    set image_url = base.prefix || g.slug || '-' || m.order_index || '.jpg?v=' || extract(epoch from now())::bigint
+    from movement_groups g, base
+    where m.group_id = g.id and g.slug = 'foundation';"
+
+Eksik dosya sorun değil: 404 dönen görselde kart kategorinin renk/ikon
+zeminine düşüyor (GroupCard/StepCard onError ile yakalıyor).

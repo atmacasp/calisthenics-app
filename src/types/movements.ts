@@ -37,7 +37,7 @@ export interface MovementPrerequisite {
 
 /** movements.service.getMovementById sonucu */
 export interface MovementWithPrerequisites extends MovementRow {
-  movement_groups: { name: string } | null;
+  movement_groups: { name: string; slug: string } | null;
   prerequisites: MovementPrerequisite[];
 }
 

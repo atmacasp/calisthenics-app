@@ -1,8 +1,9 @@
 
-import { View, Text, ScrollView, StyleSheet, Image, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useEffect, useState } from "react";
 import { useLocalSearchParams, Stack, router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
+import { MovementMedia } from "../../src/components/MovementMedia";
 import { movementsService } from "../../src/services/movements.service";
 import { progressService } from "../../src/services/progress.service";
 import { performanceService, type MovementHistoryPoint } from "../../src/services/performance.service";
@@ -94,19 +95,23 @@ export default function MovementDetailScreen() {
   return (
     <ScrollView style={styles.container}>
       <Stack.Screen options={{ headerShown: true, title: movement.name }} />
-      {/* Görsel yoksa boş gri kutu çizmiyoruz - "yakında" vaadi yerine hiç yer kaplamasın. */}
-      {movement.gif_url ? (
-        <View style={styles.imageBox}>
-          <Image source={{ uri: movement.gif_url }} style={styles.image} />
-        </View>
-      ) : null}
       <View style={styles.content}>
-        <Text style={styles.category}>{movement.movement_groups?.name}</Text>
-        <Text style={styles.title}>{movement.name}</Text>
-        <View style={styles.difficultyBadge}>
-          <Text style={styles.difficultyText}>Zorluk: {movement.difficulty_level}/10</Text>
+        {/* Hareketin adı üstteki başlıkta zaten yazıyor; burada ikinci kez
+            yazmak ekranın ilk yarısını başlığa harcıyordu. */}
+        <View style={styles.metaRow}>
+          <Text style={styles.category}>{movement.movement_groups?.name}</Text>
+          <View style={styles.difficultyBadge}>
+            <Text style={styles.difficultyText}>Zorluk: {movement.difficulty_level}/10</Text>
+          </View>
         </View>
-        <Text style={styles.description}>{movement.description}</Text>
+
+        {/* Açıklama satırı kaldırıldı: aynı şeyi "Nasıl Yapılır" adım adım
+            zaten anlatıyor, tekrar oluyordu. */}
+        <MovementMedia
+          imageUrl={movement.image_url}
+          gifUrl={movement.gif_url}
+          groupSlug={movement.movement_groups?.slug}
+        />
 
         {movement.how_to?.length ? (
           <View style={styles.guideSection}>
@@ -262,8 +267,6 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
   container: { flex: 1, backgroundColor: COLORS.paper },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.paper },
   notFoundText: { fontFamily: "Inter_400Regular", fontSize: 15, color: COLORS.graphite },
-  imageBox: { height: 220, backgroundColor: COLORS.line },
-  image: { width: "100%", height: "100%" },
   guideSection: { marginTop: 24 },
   guideTitle: { fontFamily: "Inter_700Bold", fontSize: 16, color: COLORS.ink, marginBottom: 12 },
   stepRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 10 },
@@ -303,35 +306,28 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
   historyBarBest: { backgroundColor: COLORS.accent },
   historyLabel: { fontFamily: "Inter_400Regular", fontSize: 9, color: COLORS.graphite, marginTop: 6 },
   historyUnit: { fontFamily: "Inter_400Regular", fontSize: 11, color: COLORS.graphite, marginTop: 8, textAlign: "right" },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 16,
+  },
   category: {
+    flex: 1,
     fontFamily: "Inter_600SemiBold",
     fontSize: 14,
     color: COLORS.accent,
-    marginBottom: 4,
-  },
-  title: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 26,
-    color: COLORS.ink,
-    marginBottom: 12,
   },
   difficultyBadge: {
-    alignSelf: "flex-start",
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.line,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    marginBottom: 16,
   },
   difficultyText: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: COLORS.ink },
-  description: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 16,
-    lineHeight: 24,
-    color: COLORS.ink,
-  },
   targetCard: {
     marginTop: 20,
     backgroundColor: "rgba(34, 197, 94, 0.08)",
