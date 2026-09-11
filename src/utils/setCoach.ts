@@ -62,7 +62,14 @@ export interface SetPlan {
   hint: string | null;
 }
 
-function valueOf(set: CoachSet | undefined, kind: SetKind): number | null {
+/**
+ * Bir setin ölçülen değeri: tekrarlı hareketlerde tekrar, tutuşlarda saniye.
+ * Girilmemiş ya da sıfır olan değer null döner - "0 tekrar" bir set değildir.
+ *
+ * Dışa açık, çünkü sessionFlow da aynı tanıma ihtiyaç duyuyor; iki yerde
+ * yazılsaydı "set değeri" kavramı ikiye ayrılırdı.
+ */
+export function setValueOf(set: CoachSet | undefined | null, kind: SetKind): number | null {
   if (!set) return null;
   const raw = kind === "duration" ? set.duration_seconds : set.reps;
   return raw == null || raw <= 0 ? null : raw;
@@ -109,7 +116,7 @@ export function countQualifyingSets(movement: CoachMovement): number {
   const kind = setKindOf(movement);
   const target = targetValueOf(movement, kind);
   if (target == null) return 0;
-  return movement.sets.filter((s) => (valueOf(s, kind) ?? 0) >= target).length;
+  return movement.sets.filter((s) => (setValueOf(s, kind) ?? 0) >= target).length;
 }
 
 /**
@@ -127,7 +134,7 @@ export function buildSetPlan(movement: CoachMovement): SetPlan {
   const targetComplete = requiredSets != null && qualifiedSets >= requiredSets;
   const setNumber = movement.sets.length + 1;
 
-  const lastValue = valueOf(movement.sets[movement.sets.length - 1], kind);
+  const lastValue = setValueOf(movement.sets[movement.sets.length - 1], kind);
   const suggested = targetValue ?? lastValue;
 
   let hint: string | null = null;
@@ -168,7 +175,7 @@ export function lastSetFeedback(movement: CoachMovement): string | null {
   if (sets.length === 0) return null;
 
   const kind = setKindOf(movement);
-  const value = valueOf(sets[sets.length - 1], kind);
+  const value = setValueOf(sets[sets.length - 1], kind);
   if (value == null) return null;
 
   const target = targetValueOf(movement, kind);
@@ -188,7 +195,7 @@ export function lastSetFeedback(movement: CoachMovement): string | null {
   }
 
   // Hedefi olmayan hareketlerde ölçüt bir önceki settir.
-  const previous = valueOf(sets[sets.length - 2], kind);
+  const previous = setValueOf(sets[sets.length - 2], kind);
   if (previous == null) return null;
   if (value > previous) return `Bir önceki setten ${value - previous} ${unit} fazla`;
   if (value === previous) return "Bir önceki setle aynı";

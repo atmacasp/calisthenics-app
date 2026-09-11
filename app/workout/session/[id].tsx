@@ -1,6 +1,6 @@
 
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, Vibration, Animated, Easing } from "react-native";
-import { useEffect, useState, useRef } from "react";
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert } from "react-native";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { router, useLocalSearchParams, Stack } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -13,12 +13,19 @@ import { movementsService } from "../../../src/services/movements.service";
 import { performanceService, type PreviousPerformance } from "../../../src/services/performance.service";
 import { computeFocusSuggestions, orderSuggestions } from "../../../src/utils/workoutSuggestions";
 import { buildSetPlan, lastSetFeedback, setValueRatio } from "../../../src/utils/setCoach";
+import {
+  focusAfterSet,
+  initialFocus,
+  restPlanFor,
+  sessionHeadline,
+  sessionOutline,
+  sessionProgress,
+} from "../../../src/utils/sessionFlow";
 import { SetChip } from "../../../src/components/SetChip";
+import { RestBanner, type RestRequest } from "../../../src/components/RestBanner";
 import { COLORS, themedStyles, useColors, type ThemeColors } from "../../../src/constants/theme";
 import { formatTarget } from "../../../src/utils/targetProgress";
 import { useSetRemoval } from "../../../src/hooks/useSetRemoval";
-
-const REST_SECONDS = 60;
 
 interface PersonalBest {
   maxReps: number;
@@ -107,16 +114,14 @@ export default function WorkoutSessionScreen() {
   const reset = useWorkoutStore((s) => s.reset);
 
   const [inputs, setInputs] = useState<Record<string, { reps: string; duration: string; weight: string }>>({});
-  const [restLeft, setRestLeft] = useState(0);
-  // Kalan süre çubuğunun paydası: dinlenme kaç saniyeyle başladı.
-  const [restTotal, setRestTotal] = useState(REST_SECONDS);
-  const restAnim = useRef(new Animated.Value(0)).current;
-  // scaleY merkezden büyür; üst kenarı sabit tutmak için bandın yüksekliği ölçülüyor.
-  const [restHeight, setRestHeight] = useState(64);
-  // Bant, restLeft sıfırlanınca hemen kaldırılmıyor; kapanış animasyonu bitince kalkıyor.
-  const [restVisible, setRestVisible] = useState(false);
+  // Dinlenme bandına verilen istek: kaç saniye, sırada ne var. Süreyi sessionFlow
+  // hesaplıyor, sayacı ve animasyonu bant kendi yönetiyor.
+  const [restRequest, setRestRequest] = useState<RestRequest | null>(null);
+  const restToken = useRef(0);
   const [headerHeight, setHeaderHeight] = useState(96);
-  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+  // TEK ODAK: aynı anda yalnızca bir hareket açık. Hedefi dolunca odak kendiliğinden
+  // sıradakine geçiyor; kullanıcı başlığa dokunarak istediğine dönebiliyor.
+  const [focusId, setFocusId] = useState<string | null>(null);
   // Ek ağırlık alanı varsayılan olarak KAPALI: calisthenics'te setlerin çoğu
   // vücut ağırlığıyla. Alan hep açık durduğunda ekranın üçte birini boş bir
   // kutu yiyordu; şimdi sayacın yanındaki KG düğmesi açıyor.
@@ -140,76 +145,29 @@ export default function WorkoutSessionScreen() {
   // değiştiğinde bir sonraki setin önerisi bir kez yazılır; arada kullanıcı ne
   // yazarsa o kalır.
   const seededSetCount = useRef<Record<string, number>>({});
-  const intervalRef = useRef<any>(null);
-  // Sayaç kendiliğinden mi bitti, kullanıcı mı atladı - titreşim için ayırt ediliyor.
-  const restWasRunning = useRef(false);
+  // Odak bir kez kurulduktan sonra motor kullanıcının seçimiyle yarışmıyor.
+  const focusInitialized = useRef(false);
 
+  const progress = useMemo(() => sessionProgress(sessionMovements), [sessionMovements]);
+  const outline = useMemo(() => sessionOutline(sessionMovements, focusId), [sessionMovements, focusId]);
+
+  /**
+   * Odak iki durumda motor tarafından kuruluyor: ekran ilk açıldığında ve
+   * odaktaki hareket silindiğinde. Bunun dışında karışmıyor - kullanıcı açık
+   * kartı kapatmışsa (focusId null) motor onu geri açmamalı.
+   */
   useEffect(() => {
-    if (restLeft <= 0) {
-      clearInterval(intervalRef.current);
+    if (sessionMovements.length === 0) {
+      focusInitialized.current = false;
+      if (focusId !== null) setFocusId(null);
       return;
     }
-    intervalRef.current = setInterval(() => setRestLeft((s) => s - 1), 1000);
-    return () => clearInterval(intervalRef.current);
-  }, [restLeft > 0]);
-
-  // Dinlenme dolduğunda titret: telefon yerdeyken sessiz bir sayacın faydası yok.
-  // "Atla" ile kesildiğinde titretmiyoruz - kullanıcı zaten kasten bitirdi.
-  useEffect(() => {
-    if (restLeft > 0) {
-      restWasRunning.current = true;
-      return;
+    const stale = focusId != null && !sessionMovements.some((m) => m.movementId === focusId);
+    if (!focusInitialized.current || stale) {
+      focusInitialized.current = true;
+      setFocusId(initialFocus(sessionMovements).movementId);
     }
-    if (restWasRunning.current) {
-      restWasRunning.current = false;
-      Vibration.vibrate([0, 300, 150, 300]);
-    }
-  }, [restLeft]);
-
-  // Bildirim ekranın üstünden küçük başlar, aşağı inerken büyür, yere değince
-  // balon gibi ezilip toparlanır. Tek sürücü (restAnim) var; "damla" hissi ayrı
-  // yaylardan değil, aşağıdaki ölçek eğrisinin tepe/çukur noktalarından geliyor -
-  // yayla yapılamazdı, çünkü yay ölçeği 1'in altına indirip geri getiremez.
-  useEffect(() => {
-    if (restLeft > 0) {
-      setRestVisible(true);
-      restAnim.setValue(0);
-      Animated.sequence([
-        // 1) HIZLI FAZ: tepeden dar bir damla olarak düşerken kendi pencere
-        //    boyutuna kadar büyür. Kasten çok kısa; hızlanan easing ile bitiyor.
-        Animated.timing(restAnim, {
-          toValue: 0.3,
-          duration: 160,
-          easing: Easing.in(Easing.quad),
-          useNativeDriver: true,
-        }),
-        // 2) AĞIR ÇEKİM: boyut tamamlandığı anda hız düşer. Kalan iniş, çarpma
-        //    ve sekme bu fazda. Doğrusal - hızın sabit kalması, birinci fazla
-        //    arasındaki kırılmayı belirginleştiriyor.
-        Animated.timing(restAnim, {
-          toValue: 1,
-          duration: 760,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        }),
-      ]).start();
-      return;
-    }
-
-    Animated.timing(restAnim, {
-      toValue: 0,
-      duration: 200,
-      easing: Easing.in(Easing.cubic),
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (finished) setRestVisible(false);
-    });
-  }, [restLeft > 0]);
-
-  const skipRest = () => {
-    restWasRunning.current = false;
-    setRestLeft(0);
-  };
+  }, [sessionMovements, focusId]);
 
   useEffect(() => {
     if (!authSession) return;
@@ -293,13 +251,9 @@ export default function WorkoutSessionScreen() {
     lastMovements.forEach((movement) => addSeed(movement));
   };
 
-  const toggleCollapsed = (movementId: string) => {
-    setCollapsedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(movementId)) next.delete(movementId);
-      else next.add(movementId);
-      return next;
-    });
+  /** Başlığa dokunmak odağı oraya taşır; açık karta dokunmak kapatır. */
+  const toggleFocus = (movementId: string) => {
+    setFocusId((prev) => (prev === movementId ? null : movementId));
   };
 
   const toggleWeightField = (movementId: string) => {
@@ -357,10 +311,7 @@ export default function WorkoutSessionScreen() {
     setInputs((prev) => ({ ...prev, [movementId]: { ...prev[movementId], [field]: value } }));
   };
 
-  // Bant kendi yüksekliği + başlık + çentik kadar yukarıdan, yani ekran dışından düşer.
-  const restDropFrom = -(headerHeight + restHeight + 24);
-
-  const totalLoggedSets = sessionMovements.reduce((sum, m) => sum + m.sets.length, 0);
+  const totalLoggedSets = progress.loggedSets;
 
   const handleRemoveMovement = (movementId: string, name: string, setCount: number) => {
     const message =
@@ -417,9 +368,27 @@ export default function WorkoutSessionScreen() {
       });
       addSetToMovement(movementId, saved);
       setInputs((prev) => ({ ...prev, [movementId]: { reps: "", duration: "", weight: "" } }));
-      const restFor = movement.restSeconds ?? REST_SECONDS;
-      setRestTotal(restFor);
-      setRestLeft(restFor);
+
+      // Store güncellemesi bu closure'a yansımıyor; dinlenme ve odak kararları
+      // setin EKLENMİŞ halindeki listeye göre veriliyor.
+      const next = sessionMovements.map((m) =>
+        m.movementId === movementId ? { ...m, sets: [...m.sets, saved] } : m
+      );
+
+      const rest = restPlanFor(next, movementId);
+      restToken.current += 1;
+      setRestRequest({
+        token: restToken.current,
+        seconds: rest.seconds,
+        upNext: rest.upNext,
+        note: rest.note,
+      });
+
+      // Hedef dolduysa odak sıradaki eksik harekete geçiyor. Oturumun tamamı
+      // bittiğinde (movementId null) kart açık kalıyor: ekstra set atmak isteyen
+      // kullanıcı boş ekranla karşılaşmasın.
+      const focus = focusAfterSet(next, movementId);
+      setFocusId(focus.movementId ?? movementId);
     } catch (error: any) {
       Alert.alert("Hata", error.message ?? "Set kaydedilemedi");
     }
@@ -478,63 +447,30 @@ export default function WorkoutSessionScreen() {
         style={[styles.header, { paddingTop: insets.top + 8 }]}
         onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
       >
-        <TouchableOpacity onPress={() => router.back()} hitSlop={10} style={styles.headerBack}>
-          <Feather name="arrow-left" size={22} color={COLORS.ink} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Aktif Antrenman</Text>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => router.back()} hitSlop={10} style={styles.headerBack}>
+            <Feather name="arrow-left" size={22} color={COLORS.ink} />
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle}>Aktif Antrenman</Text>
+            <Text style={styles.headerSub}>{sessionHeadline(progress)}</Text>
+          </View>
+          {progress.requiredSets > 0 && (
+            <Text style={styles.headerCount}>
+              {progress.qualifiedSets}/{progress.requiredSets}
+            </Text>
+          )}
+        </View>
+
+        {/* Oturumun ilerlemesi başlığın alt kenarında ince bir çizgi. Her hareket
+            kendi tamamlanma oranı kadar katkı veriyor - çubuk tutan setlerle
+            ilerliyor, girilen setlerle değil. */}
+        <View style={styles.headerTrack}>
+          <View style={[styles.headerFill, { width: `${Math.round(progress.ratio * 100)}%` }]} />
+        </View>
       </View>
 
-      {restVisible && (
-        <Animated.View
-          onLayout={(e) => setRestHeight(e.nativeEvent.layout.height)}
-          style={[
-            styles.restBanner,
-            { position: "absolute", top: headerHeight + 8, left: 16, right: 16, zIndex: 20 },
-            {
-              opacity: restAnim.interpolate({ inputRange: [0, 0.1, 1], outputRange: [0, 1, 1] }),
-              transform: [
-                {
-                  translateY: restAnim.interpolate({
-                    inputRange: [0, 0.15, 0.3, 0.52, 0.62, 0.78, 0.9, 1],
-                    outputRange: [restDropFrom, restDropFrom * 0.55, restDropFrom * 0.18, 12, 6, -10, 3, 0],
-                  }),
-                },
-                {
-                  scaleY: restAnim.interpolate({
-                    inputRange: [0, 0.15, 0.3, 0.52, 0.62, 0.78, 0.9, 1],
-                    outputRange: [0.5, 0.72, 1, 1.02, 0.82, 1.08, 0.97, 1],
-                  }),
-                },
-                {
-                  scaleX: restAnim.interpolate({
-                    inputRange: [0, 0.15, 0.3, 0.52, 0.62, 0.78, 0.9, 1],
-                    outputRange: [0.12, 0.55, 1, 1, 1.14, 0.95, 1.02, 1],
-                  }),
-                },
-              ],
-            },
-          ]}
-        >
-          <View style={styles.restTrack}>
-            <View style={[styles.restFill, { width: `${Math.max(0, Math.min(100, (restLeft / Math.max(1, restTotal)) * 100))}%` }]} />
-          </View>
-          <Text style={styles.restText}>Dinlenme: {restLeft}s</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 18 }}>
-            <TouchableOpacity
-              onPress={() => {
-                setRestTotal((t) => t + 30);
-                setRestLeft((s) => s + 30);
-              }}
-              hitSlop={8}
-            >
-              <Text style={styles.skipText}>+30 sn</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={skipRest} hitSlop={8}>
-            <Text style={styles.skipText}>Atla</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-      )}
+      <RestBanner request={restRequest} headerHeight={headerHeight} />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {sessionProgramLabel && (
@@ -592,7 +528,7 @@ export default function WorkoutSessionScreen() {
           </View>
         )}
 
-        {sessionMovements.map((movement) => {
+        {sessionMovements.map((movement, movementIndex) => {
           const baseline = personalBests[movement.movementId] ?? { maxReps: 0, maxDuration: 0, maxWeight: 0 };
           const recordHolderIds = computeRecordHolderIds(movement.sets, baseline);
           const targetText = formatTarget({
@@ -601,7 +537,8 @@ export default function WorkoutSessionScreen() {
             target_reps: movement.targetReps ?? null,
             target_duration_seconds: movement.targetDurationSeconds ?? null,
           });
-          const collapsed = collapsedIds.has(movement.movementId);
+          const step = outline[movementIndex];
+          const collapsed = movement.movementId !== focusId;
           const plan = buildSetPlan(movement);
           const feedback = lastSetFeedback(movement);
           // Hedefi olmayan harekette hem tekrar hem süre girilebilsin diye
@@ -611,25 +548,37 @@ export default function WorkoutSessionScreen() {
           const stepDelta = plan.kind === "duration" ? 5 : 1;
 
           return (
-            <View key={movement.movementId} style={styles.card}>
+            <View
+              key={movement.movementId}
+              style={[styles.card, step?.state === "done" && styles.cardDone, !collapsed && styles.cardFocused]}
+            >
               <TouchableOpacity
                 style={styles.cardHeaderRow}
                 activeOpacity={0.7}
-                onPress={() => toggleCollapsed(movement.movementId)}
+                onPress={() => toggleFocus(movement.movementId)}
               >
-                <Feather
-                  name={collapsed ? "chevron-right" : "chevron-down"}
-                  size={18}
-                  color={COLORS.graphite}
-                  style={{ marginRight: 8 }}
-                />
+                {/* Durum işareti chevron'un yerini aldı: hareketin bitip bitmediği
+                    kartı açmadan görünüyor, açık olan zaten tek. */}
+                <View
+                  style={[
+                    styles.stateDot,
+                    step?.state === "done" && styles.stateDotDone,
+                    step?.state === "current" && styles.stateDotCurrent,
+                  ]}
+                >
+                  {step?.state === "done" && <Feather name="check" size={12} color={COLORS.onAccent} />}
+                </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.cardTitle}>{movement.name}</Text>
                   {movement.groupName && <Text style={styles.cardCategory}>{movement.groupName}</Text>}
                 </View>
                 {collapsed && (
-                  <Text style={styles.collapsedSummary}>
-                    {movement.sets.length > 0 ? `${movement.sets.length} set` : "Henüz set yok"}
+                  <Text style={[styles.collapsedSummary, step?.state === "done" && styles.collapsedSummaryDone]}>
+                    {step?.requiredSets != null
+                      ? `${step.qualifiedSets}/${step.requiredSets} set`
+                      : movement.sets.length > 0
+                        ? `${movement.sets.length} set`
+                        : "Henüz set yok"}
                   </Text>
                 )}
                 <TouchableOpacity
@@ -851,15 +800,17 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
   StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.paper },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
     paddingHorizontal: 16,
-    paddingBottom: 10,
+    paddingBottom: 8,
     backgroundColor: COLORS.paper,
   },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   headerBack: { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontFamily: "Inter_700Bold", fontSize: 20, color: COLORS.ink },
+  headerSub: { fontFamily: "Inter_500Medium", fontSize: 12, color: COLORS.graphite, marginTop: 1 },
+  headerCount: { fontFamily: "BebasNeue_400Regular", fontSize: 20, color: COLORS.accent, letterSpacing: 0.5 },
+  headerTrack: { height: 3, borderRadius: 2, backgroundColor: COLORS.line, marginTop: 10, overflow: "hidden" },
+  headerFill: { height: 3, borderRadius: 2, backgroundColor: COLORS.accent },
   scrollContent: { padding: 16, paddingBottom: 32 },
   programBadge: {
     flexDirection: "row",
@@ -873,26 +824,6 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
     marginBottom: 16,
   },
   programBadgeText: { fontFamily: "Inter_700Bold", fontSize: 13, color: COLORS.accent },
-  restBanner: {
-
-
-    borderRadius: 16,
-    overflow: "hidden",
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    elevation: 6,
-    backgroundColor: COLORS.inverse,
-    padding: 12,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  restText: { color: COLORS.onAccent, fontFamily: "Inter_700Bold", fontSize: 14 },
-  skipText: { color: COLORS.accent, fontFamily: "Inter_600SemiBold", fontSize: 14 },
-  restTrack: { position: "absolute", left: 0, right: 0, bottom: 0, height: 3, backgroundColor: "rgba(250,249,246,0.15)" },
-  restFill: { height: 3, backgroundColor: COLORS.accent },
   emptyWrap: { marginTop: 18, marginBottom: 4 },
   emptyTitle: { fontFamily: "Inter_700Bold", fontSize: 19, color: COLORS.ink },
   emptyText: {
@@ -957,10 +888,27 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
     shadowRadius: 8,
     elevation: 2,
   },
+  // Açık kart hafifçe öne çıkıyor, biten kart soluyor: göz hangi harekette
+  // olduğunu listeyi okumadan buluyor.
+  cardFocused: { borderWidth: 1, borderColor: COLORS.accent },
+  cardDone: { opacity: 0.72 },
   cardHeaderRow: { flexDirection: "row", alignItems: "center" },
+  stateDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginRight: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: COLORS.line,
+  },
+  stateDotCurrent: { borderColor: COLORS.accent, backgroundColor: `${COLORS.accent}22` },
+  stateDotDone: { borderColor: COLORS.accent, backgroundColor: COLORS.accent },
   cardTitle: { fontFamily: "Inter_700Bold", fontSize: 17, color: COLORS.ink },
   cardCategory: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, marginTop: 1 },
   collapsedSummary: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: COLORS.graphite },
+  collapsedSummaryDone: { color: COLORS.accent },
   planRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 12 },
   planHeadline: {
     fontFamily: "BebasNeue_400Regular",
