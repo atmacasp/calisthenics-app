@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useLocalSearchParams, Stack, router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { MovementMedia } from "../../src/components/MovementMedia";
+import { ReadinessCard } from "../../src/components/ReadinessCard";
 import { movementsService } from "../../src/services/movements.service";
 import { progressService } from "../../src/services/progress.service";
 import { performanceService, type MovementHistoryPoint } from "../../src/services/performance.service";
@@ -13,6 +14,7 @@ import { useWorkoutStore } from "../../src/store/workoutStore";
 import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 import type { MovementWithPrerequisites, MovementSetLogMap } from "../../src/types/movements";
 import { areAllPrerequisitesMet, computeTargetProgress, formatTarget, getPrerequisiteTarget, isPrerequisiteMet } from "../../src/utils/targetProgress";
+import { analyzeReadiness, type ReadinessSession } from "../../src/utils/readiness";
 
 export default function MovementDetailScreen() {
   const COLORS = useColors();
@@ -26,6 +28,8 @@ export default function MovementDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [history, setHistory] = useState<MovementHistoryPoint[]>([]);
+  // readiness motorunun girdisi: bu hareketin BİTMİŞ oturumları, eskiden yeniye.
+  const [sessionHistory, setSessionHistory] = useState<ReadinessSession[]>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -34,11 +38,15 @@ export default function MovementDetailScreen() {
       movementsService.getMovementById(id),
       userId ? progressService.getMovementSetLogs(userId) : Promise.resolve({} as MovementSetLogMap),
       userId ? performanceService.getMovementHistory(userId, id) : Promise.resolve([] as MovementHistoryPoint[]),
+      userId
+        ? progressService.getMovementSessionHistory(userId, id)
+        : Promise.resolve([] as ReadinessSession[]),
     ])
-      .then(([m, logs, hist]) => {
+      .then(([m, logs, hist, sessions]) => {
         setMovement(m);
         setSetLogMap(logs);
         setHistory(hist);
+        setSessionHistory(sessions);
       })
       .finally(() => setLoading(false));
   }, [id, userId]);
@@ -70,6 +78,14 @@ export default function MovementDetailScreen() {
   const metCount = prerequisites.filter((p) => isPrerequisiteMet(p, setLogMap)).length;
   const allMet = prerequisites.length === 0 || metCount === prerequisites.length;
   const movementLocked = !areAllPrerequisitesMet(prerequisites, setLogMap);
+  // "Neden ilerlemiyorum": son antrenmanlara bakıp saplanma/ilerleme kararı.
+  const readiness = analyzeReadiness({
+    targetType: movement.target_type,
+    targetSets: movement.target_sets,
+    targetReps: movement.target_reps,
+    targetDurationSeconds: movement.target_duration_seconds,
+    sessions: sessionHistory,
+  });
 
   const handleQuickStart = async () => {
     if (!userId || movementLocked || starting) return;
@@ -175,6 +191,11 @@ export default function MovementDetailScreen() {
             {movement.target_note && <Text style={styles.targetNote}>{movement.target_note}</Text>}
           </View>
         )}
+
+        {/* Hedef kartının hemen altında: hedefe doğru gidiyor musun. Kart
+            söyleyecek bir şeyi yoksa (hiç çalışılmamış ya da hedef zaten
+            tutmuş) kendini gizliyor. */}
+        <ReadinessCard verdict={readiness} />
 
         <TouchableOpacity
           style={[styles.quickStartButton, movementLocked && styles.quickStartButtonDisabled]}

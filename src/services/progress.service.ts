@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabase";
 import type { MovementSetLogMap, SetLogEntry } from "../types/movements";
 import { toLocalDateKey } from "../utils/date";
+import type { ReadinessSession } from "../utils/readiness";
 
 function getMonday(weekOffset: number) {
   const d = new Date();
@@ -278,5 +279,51 @@ export const progressService = {
       days.push({ date: key, count: countsByDate[key] ?? 0 });
     }
     return days;
+  },
+
+  /**
+   * Tek bir hareketin son antrenmanları, ESKİDEN YENİYE sıralı.
+   *
+   * getMovementSetLogs oturumları bir sözlükte topluyor ve tarih taşımıyor -
+   * "son 3 antrenman" sorusu oradan cevaplanamıyor (session_id'ler UUID, sıraya
+   * sokulamaz). readiness motorunun ihtiyacı olan sıralı geçmiş bu sorgu.
+   *
+   * Yalnızca BİTMİŞ oturumlar sayılıyor: yarım kalan oturum "bu antrenmanda
+   * ilerleyemedin" demek için henüz erken.
+   */
+  async getMovementSessionHistory(
+    userId: string,
+    movementId: string,
+    limit = 10
+  ): Promise<ReadinessSession[]> {
+    const { data, error } = await supabase
+      .from("workout_sets")
+      .select("session_id, reps, duration_seconds, added_weight_kg, workout_sessions!inner(user_id, started_at, ended_at)")
+      .eq("movement_id", movementId)
+      .eq("workout_sessions.user_id", userId)
+      .not("workout_sessions.ended_at", "is", null)
+      .order("completed_at", { ascending: true });
+    if (error) throw error;
+
+    const bySession = new Map<string, ReadinessSession>();
+    for (const row of (data ?? []) as any[]) {
+      const sessionId: string | null = row.session_id;
+      if (!sessionId) continue;
+      let session = bySession.get(sessionId);
+      if (!session) {
+        session = { sessionId, date: row.workout_sessions?.started_at ?? "", sets: [] };
+        bySession.set(sessionId, session);
+      }
+      session.sets.push({
+        reps: row.reps,
+        duration_seconds: row.duration_seconds,
+        added_weight_kg: row.added_weight_kg,
+      });
+    }
+
+    // Oturumları başlangıç tarihine göre sırala: setler completed_at'e göre
+    // geldi ama iki oturumun setleri tarih olarak iç içe geçebilir.
+    const sessions = [...bySession.values()].sort((a, b) => a.date.localeCompare(b.date));
+    return sessions.slice(-limit);
   },
 };
