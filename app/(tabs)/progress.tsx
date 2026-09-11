@@ -12,6 +12,7 @@ import { EmptyState } from "../../src/components/EmptyState";
 import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 import { useTabBarSpace } from "../../src/constants/layout";
 import type { ProgramAdherence } from "../../src/types/programs";
+import { summarizeVolume } from "../../src/utils/volumeLoad";
 
 const SEGMENTS = [
   { key: "genel", label: "Genel", icon: "apps-outline" },
@@ -120,10 +121,10 @@ export default function ProgressScreen() {
   const hasWorkouts = stats.totalSets > 0;
 
   const maxWeekly = Math.max(...weeklyVolume.map((w) => w.totalSets), 1);
-  const avgWeekly = weeklyVolume.length ? Math.round(weeklyVolume.reduce((s, w) => s + w.totalSets, 0) / weeklyVolume.length) : 0;
-  const bestWeek = weeklyVolume.reduce((best, w) => (w.totalSets > (best?.totalSets ?? -1) ? w : best), null as any);
-  const lastTwo = weeklyVolume.slice(-2);
-  const weeklyTrend = lastTwo.length === 2 ? lastTwo[1].totalSets - lastTwo[0].totalSets : 0;
+  // Ortalama, en iyi hafta, trend ve yorum artık volumeLoad motorunda.
+  // Buradaki eski hesap devam eden haftayı da katıyordu: pazartesi sabahı o
+  // hafta 0 set olduğu için trend her pazartesi büyük bir eksi gösteriyordu.
+  const volume = summarizeVolume(weeklyVolume);
 
   const weights = weightLogs.map((l) => Number(l.weight_kg));
   const firstWeight = weights[0];
@@ -248,18 +249,43 @@ export default function ProgressScreen() {
         <>
           <View style={styles.volumeSummaryRow}>
             <View style={styles.volumeSummaryBox}>
-              <Text style={styles.volumeSummaryNumber}>{avgWeekly}</Text>
+              <Text style={styles.volumeSummaryNumber}>{volume.averageSets}</Text>
               <Text style={styles.volumeSummaryLabel}>ort. set/hafta</Text>
             </View>
             <View style={styles.volumeSummaryBox}>
-              <Text style={styles.volumeSummaryNumber}>{bestWeek?.totalSets ?? 0}</Text>
+              <Text style={styles.volumeSummaryNumber}>{volume.bestSets}</Text>
               <Text style={styles.volumeSummaryLabel}>en yüksek hafta</Text>
             </View>
             <View style={styles.volumeSummaryBox}>
-              <Text style={[styles.volumeSummaryNumber, weeklyTrend < 0 && { color: COLORS.warn }]}>
-                {weeklyTrend > 0 ? `+${weeklyTrend}` : weeklyTrend}
+              <Text style={[styles.volumeSummaryNumber, volume.trend < 0 && { color: COLORS.warn }]}>
+                {volume.trend > 0 ? `+${volume.trend}` : volume.trend}
               </Text>
               <Text style={styles.volumeSummaryLabel}>haftalık trend</Text>
+            </View>
+          </View>
+
+          {/* Sayının ne anlama geldiği. Sıçrama ve sert düşüş dışında öneri
+              yok - her hafta tavsiye veren ekran gürültü olur. */}
+          <View style={styles.volumeNote}>
+            <Ionicons
+              name={
+                volume.state === "spike"
+                  ? "warning-outline"
+                  : volume.state === "building"
+                    ? "trending-up-outline"
+                    : volume.state === "easing" || volume.state === "dropping"
+                      ? "trending-down-outline"
+                      : "remove-outline"
+              }
+              size={15}
+              color={volume.state === "spike" ? COLORS.warn : volume.state === "building" ? COLORS.accent : COLORS.graphite}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.volumeNoteHeadline}>{volume.headline}</Text>
+              {volume.advice && <Text style={styles.volumeNoteAdvice}>{volume.advice}</Text>}
+              {volume.currentWeekSets != null && (
+                <Text style={styles.volumeNoteCurrent}>Bu hafta şimdiye kadar {volume.currentWeekSets} set.</Text>
+              )}
             </View>
           </View>
 
@@ -409,6 +435,26 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
   segmentLabel: { fontFamily: "Inter_500Medium", fontSize: 12, color: COLORS.graphite },
   segmentLabelActive: { color: COLORS.onAccent, fontFamily: "Inter_700Bold" },
   sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 15, color: COLORS.ink, marginBottom: 12, marginTop: 4 },
+  volumeNote: {
+    flexDirection: "row",
+    gap: 10,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  volumeNoteHeadline: { fontFamily: "Inter_700Bold", fontSize: 13, color: COLORS.ink },
+  volumeNoteAdvice: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: COLORS.graphite,
+    marginTop: 5,
+  },
+  volumeNoteCurrent: { fontFamily: "Inter_500Medium", fontSize: 12, color: COLORS.graphite, marginTop: 6 },
   adherenceCard: {
     backgroundColor: COLORS.surface,
     borderRadius: 16,
