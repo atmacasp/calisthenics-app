@@ -21,18 +21,15 @@ import { movementsService } from "../../src/services/movements.service";
 import type { MovementWithGroupAndPrerequisites } from "../../src/types/movements";
 import type { ProgramDraft, ProgramDraftMovement, ProgramLevel } from "../../src/types/programs";
 import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
+import { DAY_NAMES, DAY_SHORT } from "../../src/utils/programDays";
+import { todayDayOfWeek } from "../../src/utils/date";
+import { inferProgramTargetKind } from "../../src/utils/programTargets";
 
 const MIN_QUERY_LENGTH = 2;
 
-const DAYS = [
-  { n: 1, short: "Pzt", name: "Pazartesi" },
-  { n: 2, short: "Sal", name: "Salı" },
-  { n: 3, short: "Çrş", name: "Çarşamba" },
-  { n: 4, short: "Prş", name: "Perşembe" },
-  { n: 5, short: "Cum", name: "Cuma" },
-  { n: 6, short: "Cmt", name: "Cumartesi" },
-  { n: 7, short: "Paz", name: "Pazar" },
-];
+// Gün isimleri programDays'ten türetiliyor - burada üçüncü bir kopya vardı
+// ve Perşembe'yi başka türlü kısaltıyordu.
+const DAYS = [1, 2, 3, 4, 5, 6, 7].map((n) => ({ n, short: DAY_SHORT[n], name: DAY_NAMES[n] }));
 
 const LEVELS: { value: ProgramLevel; label: string }[] = [
   { value: "beginner", label: "Başlangıç" },
@@ -61,11 +58,6 @@ function toNum(value: string): number | null {
   const parsed = Number(value);
   if (!value.trim() || Number.isNaN(parsed) || parsed <= 0) return null;
   return Math.round(parsed);
-}
-
-function todayDayOfWeek() {
-  const jsDay = new Date().getDay();
-  return jsDay === 0 ? 7 : jsDay;
 }
 
 export default function ProgramBuilderScreen() {
@@ -110,8 +102,7 @@ export default function ProgramBuilderScreen() {
             movementId: item.movementId ?? "",
             movementName: item.movementName,
             groupName: "",
-            // program_movements'ta target_type kolonu yok; süre dolu mu diye bakıp çıkarıyoruz
-            targetType: item.targetDurationSeconds ? "duration" : "reps_sets",
+            targetType: inferProgramTargetKind(item),
             sets: item.targetSets ? String(item.targetSets) : "",
             reps: item.targetReps ? String(item.targetReps) : "",
             duration: item.targetDurationSeconds ? String(item.targetDurationSeconds) : "",

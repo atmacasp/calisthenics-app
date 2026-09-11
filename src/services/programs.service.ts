@@ -1,6 +1,5 @@
 import { supabase } from "../lib/supabase";
-import { toLocalDateKey, todayLocalKey } from "../utils/date";
-import type { DayRemap } from "../utils/programDays";
+import { toLocalDateKey, todayDayOfWeek, todayLocalKey } from "../utils/date";
 import type {
   ProgramAdherence,
   ProgramDraft,
@@ -9,8 +8,7 @@ import type {
   TodayProgramPlan,
   UserProgramRow,
 } from "../types/programs";
-
-const DAY_NAMES = ["", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
+import { DAY_NAMES, type DayRemap } from "../utils/programDays";
 
 const DAY_MS = 86400000;
 
@@ -191,8 +189,7 @@ export const programsService = {
     const program = await programsService.getProgramWithDays(active.program_id);
     if (!program) return null;
 
-    const jsDay = new Date().getDay();
-    const dayOfWeek = jsDay === 0 ? 7 : jsDay;
+    const dayOfWeek = todayDayOfWeek();
 
     return {
       program,
@@ -437,8 +434,7 @@ export const programsService = {
       // Yerel gun anahtarindan haftanin gunu: gece yapilan antrenman UTC'ye
       // gore bir onceki gune kaymasin diye tarih hep yerel okunuyor.
       const local = new Date(`${toLocalDateKey(s.started_at)}T00:00:00`);
-      const jsDay = local.getDay();
-      const dayOfWeek = jsDay === 0 ? 7 : jsDay;
+      const dayOfWeek = todayDayOfWeek(local);
       if (!result[dayOfWeek]) result[dayOfWeek] = s.id;
     });
     return result;

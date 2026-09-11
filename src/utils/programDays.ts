@@ -7,6 +7,12 @@
  * saf olarak cevaplar; veritabanına yazma işi programs.service'te.
  */
 
+/**
+ * Gün isimlerinin TEK kaynağı - servisler ve ekranlar buradan alır.
+ * (Daha önce dört ayrı kopya vardı ve Perşembe iki farklı kısaltmayla
+ * yazılıyordu: aynı gün, bildirimde "Prş", gün seçicide "Per".)
+ * 0. eleman boş: dizi 1-7 ile indeksleniyor.
+ */
 export const DAY_NAMES = ["", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"] as const;
 
 export const DAY_SHORT = ["", "Pzt", "Sal", "Çrş", "Per", "Cum", "Cmt", "Paz"] as const;

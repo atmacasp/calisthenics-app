@@ -614,7 +614,7 @@ export default function WorkoutSessionScreen() {
                             </View>
                           ) : null}
                           {recordHolderIds.has(s.id) && <Text style={styles.prBadge}>🏆 Yeni Rekor!</Text>}
-                          <TouchableOpacity hitSlop={8} onPress={() => confirmRemoveSet(s.id, movement.movementId, i + 1)}>
+                          <TouchableOpacity hitSlop={8} onPress={() => confirmRemoveSet({ setId: s.id, movementId: movement.movementId, setNumber: i + 1 })}>
                             <Feather name="x" size={14} color={COLORS.graphite} />
                           </TouchableOpacity>
                         </View>

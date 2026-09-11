@@ -12,26 +12,18 @@ import {
   type ProgramAddition,
   type ProgramUpgrade,
 } from "../../src/utils/programUpgrades";
-import { DAY_SHORT, buildDayRemap, describeRemap, getTrainingDays, isNoopRemap } from "../../src/utils/programDays";
+import { DAY_NAMES, DAY_SHORT, buildDayRemap, describeRemap, getTrainingDays, isNoopRemap } from "../../src/utils/programDays";
+import { todayDayOfWeek } from "../../src/utils/date";
+import { formatProgramTarget } from "../../src/utils/programTargets";
 import type { MovementSetLogMap, MovementWithGroupAndPrerequisites } from "../../src/types/movements";
-import type { ProgramMovementWithName, ProgramWithDays, UserProgramRow } from "../../src/types/programs";
+import type { ProgramWithDays, UserProgramRow } from "../../src/types/programs";
 import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 
-const DAY_NAMES = ["", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
 const LEVEL_LABELS: Record<string, string> = {
   beginner: "Başlangıç",
   intermediate: "Orta Seviye",
   advanced: "İleri Seviye",
 };
-
-// program_movements tablosunda target_type kolonu yok (movements'tan farklı
-// olarak) - hangi tür hedef olduğunu target_duration_seconds/target_reps
-// dolu mu diye bakarak çıkarıyoruz.
-function formatProgramTarget(pm: ProgramMovementWithName): string {
-  if (pm.targetDurationSeconds) return `${pm.targetSets ?? 1} set x ${pm.targetDurationSeconds} sn`;
-  if (pm.targetReps) return `${pm.targetSets ?? 1} set x ${pm.targetReps} tekrar`;
-  return `${pm.targetSets ?? 1} set`;
-}
 
 export default function ProgramDetailScreen() {
   const COLORS = useColors();
@@ -278,9 +270,7 @@ export default function ProgramDetailScreen() {
     );
   }
 
-  // JS: 0=Pazar..6=Cumartesi -> semamiz: 1=Pazartesi..7=Pazar
-  const jsDay = new Date().getDay();
-  const todayDayOfWeek = jsDay === 0 ? 7 : jsDay;
+  const today = todayDayOfWeek();
 
   const days = Object.keys(program.daysMap)
     .map(Number)
@@ -450,7 +440,7 @@ export default function ProgramDetailScreen() {
                   <Ionicons name="checkmark-circle" size={13} color={COLORS.accent} />
                   <Text style={styles.dayDoneChipText}>Tamamlandı</Text>
                 </TouchableOpacity>
-              ) : isActive && day === todayDayOfWeek ? (
+              ) : isActive && day === today ? (
                 <Text style={styles.dayTodayChip}>Bugün</Text>
               ) : null}
             </View>

@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { router, useLocalSearchParams, Stack, useFocusEffect } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { workoutsService } from "../../../src/services/workouts.service";
-import { workoutService } from "../../../src/services/workout.service";
+import { useSetRemoval } from "../../../src/hooks/useSetRemoval";
 import type { WorkoutSessionDetail } from "../../../src/types/workouts";
 import { COLORS, themedStyles, useColors, type ThemeColors } from "../../../src/constants/theme";
 
@@ -33,6 +33,13 @@ export default function WorkoutHistoryDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [notes, setNotes] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
+
+  /**
+   * Geçmişteki yanlış bir seti silmek. Set kaydı rekorlara, hedef ilerlemesine
+   * ve kilit durumuna girdiği için düzeltmenin tek yolu kaydı kaldırmak.
+   * Aktif antrenman ekranıyla aynı hook: onay metni ve hata davranışı tek yerde.
+   */
+  const { confirmRemoveSet } = useSetRemoval();
 
   const loadData = useCallback(() => {
     if (!id) return;
@@ -65,28 +72,6 @@ export default function WorkoutHistoryDetailScreen() {
     } finally {
       setSavingNotes(false);
     }
-  };
-
-  /**
-   * Geçmişteki yanlış bir seti silmek. Set kaydı rekorlara, hedef ilerlemesine
-   * ve kilit durumuna girdiği için düzeltmenin tek yolu kaydı kaldırmak.
-   */
-  const confirmRemoveSet = (setId: string, setNumber: number) => {
-    Alert.alert("Seti sil", `${setNumber}. set kaydı silinecek.`, [
-      { text: "Vazgeç", style: "cancel" },
-      {
-        text: "Sil",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await workoutService.removeSet(setId);
-            loadData();
-          } catch (error: any) {
-            Alert.alert("Hata", error.message ?? "Set silinemedi");
-          }
-        },
-      },
-    ]);
   };
 
   const handleDelete = () => {
@@ -154,7 +139,7 @@ export default function WorkoutHistoryDetailScreen() {
               <Text style={styles.setLine}>
               Set {s.setNumber}: {s.reps ? `${s.reps} tekrar` : ""} {s.durationSeconds ? `${s.durationSeconds} sn` : ""} {s.addedWeightKg ? `+${s.addedWeightKg}kg` : ""}
               </Text>
-              <TouchableOpacity onPress={() => confirmRemoveSet(s.id, s.setNumber)} hitSlop={8}>
+              <TouchableOpacity onPress={() => confirmRemoveSet({ setId: s.id, setNumber: s.setNumber, onRemoved: loadData })} hitSlop={8}>
                 <Feather name="x" size={14} color={COLORS.graphite} />
               </TouchableOpacity>
             </View>

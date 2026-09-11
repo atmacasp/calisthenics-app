@@ -1,5 +1,5 @@
 /// <reference types="jest" />
-import { toLocalDateKey, todayLocalKey } from "../date";
+import { toLocalDateKey, todayLocalKey, todayDayOfWeek } from "../date";
 
 /**
  * Bu dosyanın varlık sebebi gerçek bir hata: seri ve aktivite takvimi UTC gününe
@@ -32,5 +32,32 @@ describe("toLocalDateKey", () => {
 
   it("todayLocalKey bugünün yerel anahtarını verir", () => {
     expect(todayLocalKey()).toBe(toLocalDateKey(new Date()));
+  });
+});
+
+describe("todayDayOfWeek", () => {
+  // JS: 0=Pazar..6=Cumartesi. Şemamız 1=Pazartesi..7=Pazar.
+  it("pazartesi 1 döner", () => {
+    expect(todayDayOfWeek(new Date(2026, 8, 7))).toBe(1);
+  });
+
+  it("cumartesi 6 döner", () => {
+    expect(todayDayOfWeek(new Date(2026, 8, 12))).toBe(6);
+  });
+
+  it("pazar 0 değil 7 döner", () => {
+    // Dört ayrı kopyada tekrarlanan tek kural buydu; kayması yanlış günü açardı.
+    expect(todayDayOfWeek(new Date(2026, 8, 13))).toBe(7);
+  });
+
+  it("her gün 1-7 aralığında kalır", () => {
+    for (let i = 0; i < 14; i++) {
+      const day = todayDayOfWeek(new Date(2026, 8, 1 + i));
+      expect(day >= 1 && day <= 7).toBe(true);
+    }
+  });
+
+  it("argümansız çağrı bugünü kullanır", () => {
+    expect(todayDayOfWeek()).toBe(todayDayOfWeek(new Date()));
   });
 });

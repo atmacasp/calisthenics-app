@@ -13,6 +13,7 @@ import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/con
 import { useTabBarSpace } from "../../src/constants/layout";
 import type { MovementSetLogMap, MovementWithGroupAndPrerequisites } from "../../src/types/movements";
 import { formatTarget, type TargetProgress } from "../../src/utils/targetProgress";
+import { formatProgramTarget } from "../../src/utils/programTargets";
 import {
   computeFocusSuggestions,
   orderSuggestions,
@@ -159,11 +160,7 @@ export default function WorkoutScreen() {
               {plan.movements.map((pm) => (
                 <View key={pm.id} style={styles.todayMovementRow}>
                   <Text style={styles.todayMovementName}>{pm.movementName}</Text>
-                  <Text style={styles.todayMovementTarget}>
-                    {pm.targetDurationSeconds
-                      ? `${pm.targetSets ?? 1} set x ${pm.targetDurationSeconds} sn`
-                      : `${pm.targetSets ?? 1} set x ${pm.targetReps ?? "-"} tekrar`}
-                  </Text>
+                  <Text style={styles.todayMovementTarget}>{formatProgramTarget(pm)}</Text>
                 </View>
               ))}
               <TouchableOpacity

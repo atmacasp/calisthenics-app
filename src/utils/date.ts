@@ -16,3 +16,15 @@ export function toLocalDateKey(value: Date | string): string {
 export function todayLocalKey(): string {
   return toLocalDateKey(new Date());
 }
+
+/**
+ * Haftanın günü, şemamızın numaralandırmasıyla: 1=Pazartesi .. 7=Pazar.
+ *
+ * JS'in getDay()'i 0=Pazar ile başlar; bu üç satırlık çevrim dört ayrı
+ * dosyada elle tekrarlanıyordu. Gün numarası program satırlarının anahtarı
+ * olduğu için bir kopyanın kayması sessizce yanlış günü açardı.
+ */
+export function todayDayOfWeek(reference: Date = new Date()): number {
+  const jsDay = reference.getDay();
+  return jsDay === 0 ? 7 : jsDay;
+}

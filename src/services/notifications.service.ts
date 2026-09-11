@@ -1,10 +1,9 @@
 import { Platform } from "react-native";
 import { isRunningInExpoGo } from "expo";
 import { programsService } from "./programs.service";
+import { DAY_NAMES, DAY_SHORT } from "../utils/programDays";
 
 const CHANNEL_ID = "workout-reminders";
-const DAY_NAMES = ["", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
-const DAY_SHORT = ["", "Pzt", "Sal", "Çrş", "Prş", "Cum", "Cmt", "Paz"];
 
 /**
  * Android + Expo Go'da expo-notifications'ı IMPORT ETMEK bile uygulamayı
