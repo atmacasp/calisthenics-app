@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Modal } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from "react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalSearchParams, Stack, useFocusEffect, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -12,11 +12,13 @@ import {
   type ProgramAddition,
   type ProgramUpgrade,
 } from "../../src/utils/programUpgrades";
-import { DAY_NAMES, DAY_SHORT, buildDayRemap, describeRemap, getTrainingDays, isNoopRemap } from "../../src/utils/programDays";
+import { DAY_NAMES, buildDayRemap, describeRemap, getTrainingDays, isNoopRemap } from "../../src/utils/programDays";
 import { todayDayOfWeek } from "../../src/utils/date";
 import { formatProgramTarget } from "../../src/utils/programTargets";
 import type { MovementSetLogMap, MovementWithGroupAndPrerequisites } from "../../src/types/movements";
 import type { ProgramWithDays, UserProgramRow } from "../../src/types/programs";
+import { SuggestionCard, type SuggestionItem } from "../../src/components/SuggestionCard";
+import { DayPickerSheet } from "../../src/components/DayPickerSheet";
 import { COLORS, themedStyles, useColors, type ThemeColors } from "../../src/constants/theme";
 
 const LEVEL_LABELS: Record<string, string> = {
@@ -281,6 +283,22 @@ export default function ProgramDetailScreen() {
   const upgrades = movements.length ? computeProgramUpgrades(program.daysMap, movements, setLogMap) : [];
   const additions = movements.length ? computeProgramAdditions(program.daysMap, movements, setLogMap) : [];
 
+  // İki öneri kartı aynı bileşeni kullanıyor; aradaki tek fark satırın neyi
+  // gösterdiği. Terfide "şu anki -> bir üst basamak", eklemede tek hareket.
+  const upgradeItems: SuggestionItem[] = upgrades.map((u) => ({
+    id: u.programMovementId,
+    context: DAY_NAMES[u.dayOfWeek],
+    name: u.currentName,
+    nextName: u.nextMovement.name,
+    targetLabel: u.nextTargetLabel,
+  }));
+  const additionItems: SuggestionItem[] = additions.map((a) => ({
+    id: a.movement.id,
+    context: `${a.groupName} · ${DAY_NAMES[a.dayOfWeek]}`,
+    name: a.movement.name,
+    targetLabel: a.targetLabel,
+  }));
+
   return (
     <>
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -346,83 +364,39 @@ export default function ProgramDetailScreen() {
         </View>
       )}
 
-      {upgrades.length > 0 && (
-        <View style={styles.upgradeCard}>
-          <View style={styles.upgradeHeaderRow}>
-            <Ionicons name="trending-up-outline" size={15} color={COLORS.accent} />
-            <Text style={styles.upgradeTitle}>Basamak Terfisi</Text>
-          </View>
-          <Text style={styles.upgradeSubtitle}>
-            {isMine
-              ? "Bu hareketlerin hedefini tamamladın, bir üst basamağa geçebilirsin."
-              : "Bu hareketlerin hedefini tamamladın. Programı kopyalarsan basamakları yükseltebilirsin."}
-          </Text>
+      <SuggestionCard
+        icon="trending-up-outline"
+        title="Basamak Terfisi"
+        subtitle={
+          isMine
+            ? "Bu hareketlerin hedefini tamamladın, bir üst basamağa geçebilirsin."
+            : "Bu hareketlerin hedefini tamamladın. Programı kopyalarsan basamakları yükseltebilirsin."
+        }
+        items={upgradeItems}
+        actionLabel={isMine ? "Yükselt" : null}
+        busyId={upgradingId}
+        onAction={(id) => {
+          const upgrade = upgrades.find((u) => u.programMovementId === id);
+          if (upgrade) handleUpgrade(upgrade);
+        }}
+      />
 
-          {upgrades.map((u) => (
-            <View key={u.programMovementId} style={styles.upgradeRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.upgradeDay}>{DAY_NAMES[u.dayOfWeek]}</Text>
-                <Text style={styles.upgradeMovement}>
-                  {u.currentName} <Text style={styles.upgradeArrow}>→</Text> {u.nextMovement.name}
-                </Text>
-                {u.nextTargetLabel && <Text style={styles.upgradeTarget}>{u.nextTargetLabel}</Text>}
-              </View>
-              {isMine &&
-                (upgradingId === u.programMovementId ? (
-                  <ActivityIndicator size="small" color={COLORS.accent} />
-                ) : (
-                  <TouchableOpacity
-                    style={styles.upgradeButton}
-                    activeOpacity={0.8}
-                    disabled={!!upgradingId}
-                    onPress={() => handleUpgrade(u)}
-                  >
-                    <Text style={styles.upgradeButtonText}>Yükselt</Text>
-                  </TouchableOpacity>
-                ))}
-            </View>
-          ))}
-        </View>
-      )}
-
-      {additions.length > 0 && (
-        <View style={styles.upgradeCard}>
-          <View style={styles.upgradeHeaderRow}>
-            <Ionicons name="add-circle-outline" size={15} color={COLORS.accent} />
-            <Text style={styles.upgradeTitle}>Programına Ekle</Text>
-          </View>
-          <Text style={styles.upgradeSubtitle}>
-            {isMine
-              ? "Ön koşullarını karşıladığın, henüz programında olmayan basamaklar."
-              : "Bu basamakların kilidi açık. Programı kopyalarsan ekleyebilirsin."}
-          </Text>
-
-          {additions.map((a) => (
-            <View key={a.movement.id} style={styles.upgradeRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.upgradeDay}>
-                  {a.groupName} · {DAY_NAMES[a.dayOfWeek]}
-                </Text>
-                <Text style={styles.upgradeMovement}>{a.movement.name}</Text>
-                {a.targetLabel && <Text style={styles.upgradeTarget}>{a.targetLabel}</Text>}
-              </View>
-              {isMine &&
-                (addingId === a.movement.id ? (
-                  <ActivityIndicator size="small" color={COLORS.accent} />
-                ) : (
-                  <TouchableOpacity
-                    style={styles.upgradeButton}
-                    activeOpacity={0.8}
-                    disabled={!!addingId}
-                    onPress={() => handleAdd(a)}
-                  >
-                    <Text style={styles.upgradeButtonText}>Ekle</Text>
-                  </TouchableOpacity>
-                ))}
-            </View>
-          ))}
-        </View>
-      )}
+      <SuggestionCard
+        icon="add-circle-outline"
+        title="Programına Ekle"
+        subtitle={
+          isMine
+            ? "Ön koşullarını karşıladığın, henüz programında olmayan basamaklar."
+            : "Bu basamakların kilidi açık. Programı kopyalarsan ekleyebilirsin."
+        }
+        items={additionItems}
+        actionLabel={isMine ? "Ekle" : null}
+        busyId={addingId}
+        onAction={(id) => {
+          const addition = additions.find((a) => a.movement.id === id);
+          if (addition) handleAdd(addition);
+        }}
+      />
 
       {days.length === 0 ? (
         <Text style={styles.emptyText}>Bu programda henüz hareket yok.</Text>
@@ -455,67 +429,18 @@ export default function ProgramDetailScreen() {
       )}
     </ScrollView>
 
-    <Modal visible={daysOpen} animationType="slide" transparent onRequestClose={() => setDaysOpen(false)}>
-      <View style={styles.sheetBackdrop}>
-        <View style={styles.sheet}>
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Antrenman Günleri</Text>
-            <TouchableOpacity onPress={() => setDaysOpen(false)} hitSlop={10}>
-              <Ionicons name="close" size={22} color={COLORS.ink} />
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.sheetSubtitle}>
-            Şablona dokunulmaz - hareketler, hedefler ve sıra aynı kalır, sadece hangi günlere denk geldiği değişir.
-          </Text>
-
-          <View style={styles.dayChipRow}>
-            {[1, 2, 3, 4, 5, 6, 7].map((day) => {
-              const picked = selectedDays.includes(day);
-              return (
-                <TouchableOpacity
-                  key={day}
-                  style={[styles.dayChip, picked && styles.dayChipActive]}
-                  onPress={() => toggleDay(day)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.dayChipText, picked && styles.dayChipTextActive]}>{DAY_SHORT[day]}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <Text style={[styles.sheetCounter, daySelectionReady && { color: COLORS.accent }]}>
-            {selectedDays.length}/{trainingDays.length} gün seçildi
-          </Text>
-
-          {dayRemapPreview.length > 0 && (
-            <View style={styles.remapBox}>
-              {dayRemapPreview.map((line) => (
-                <Text key={line} style={styles.remapLine}>
-                  {line}
-                </Text>
-              ))}
-            </View>
-          )}
-
-          <TouchableOpacity
-            style={[styles.sheetSaveButton, (!daySelectionReady || dayRemapIsNoop) && styles.sheetSaveButtonDisabled]}
-            onPress={handleSaveDays}
-            activeOpacity={0.85}
-            disabled={!daySelectionReady || dayRemapIsNoop || savingDays}
-          >
-            {savingDays ? (
-              <ActivityIndicator size="small" color={COLORS.onAccent} />
-            ) : (
-              <Text style={styles.sheetSaveButtonText}>
-                {dayRemapIsNoop && daySelectionReady ? "Değişiklik yok" : "Günleri Taşı"}
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
+    <DayPickerSheet
+      visible={daysOpen}
+      requiredCount={trainingDays.length}
+      selectedDays={selectedDays}
+      ready={daySelectionReady}
+      isNoop={dayRemapIsNoop}
+      preview={dayRemapPreview}
+      saving={savingDays}
+      onToggleDay={toggleDay}
+      onClose={() => setDaysOpen(false)}
+      onSave={handleSaveDays}
+    />
     </>
   );
 }
@@ -564,107 +489,6 @@ const getStyles = themedStyles((COLORS: ThemeColors) =>
     borderColor: COLORS.line,
   },
   ownerButtonText: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.ink },
-  sheetBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
-  sheet: {
-    backgroundColor: COLORS.paper,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-    padding: 22,
-    paddingBottom: 34,
-  },
-  sheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  sheetTitle: { fontFamily: "Inter_700Bold", fontSize: 18, color: COLORS.ink },
-  sheetSubtitle: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 12,
-    lineHeight: 18,
-    color: COLORS.graphite,
-    marginTop: 6,
-  },
-  dayChipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 18 },
-  dayChip: {
-    minWidth: 46,
-    paddingHorizontal: 10,
-    paddingVertical: 11,
-    borderRadius: 12,
-    alignItems: "center",
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.line,
-  },
-  dayChipActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
-  dayChipText: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: COLORS.ink },
-  dayChipTextActive: { color: COLORS.onAccent },
-  sheetCounter: { fontFamily: "Inter_500Medium", fontSize: 12, color: COLORS.graphite, marginTop: 12 },
-  remapBox: {
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.line,
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 12,
-    gap: 4,
-  },
-  remapLine: { fontFamily: "Inter_500Medium", fontSize: 13, color: COLORS.ink },
-  sheetSaveButton: {
-    marginTop: 18,
-    backgroundColor: COLORS.accent,
-    borderRadius: 14,
-    paddingVertical: 15,
-    alignItems: "center",
-  },
-  sheetSaveButtonDisabled: { backgroundColor: COLORS.line },
-  sheetSaveButtonText: { fontFamily: "Inter_700Bold", fontSize: 15, color: COLORS.onAccent },
-  upgradeCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    padding: 16,
-    marginTop: 18,
-    borderWidth: 1,
-    borderColor: "rgba(34,197,94,0.25)",
-  },
-  upgradeHeaderRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  upgradeTitle: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 12,
-    color: COLORS.accent,
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-  },
-  upgradeSubtitle: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 13,
-    color: COLORS.graphite,
-    marginTop: 6,
-    marginBottom: 12,
-    lineHeight: 19,
-  },
-  upgradeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.line,
-    marginTop: 10,
-  },
-  upgradeDay: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 11,
-    color: COLORS.graphite,
-    textTransform: "uppercase",
-    letterSpacing: 0.3,
-  },
-  upgradeMovement: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: COLORS.ink, marginTop: 2 },
-  upgradeArrow: { color: COLORS.accent },
-  upgradeTarget: { fontFamily: "Inter_400Regular", fontSize: 12, color: COLORS.graphite, marginTop: 2 },
-  upgradeButton: {
-    backgroundColor: COLORS.accent,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  upgradeButtonText: { fontFamily: "Inter_700Bold", fontSize: 13, color: COLORS.onAccent },
   dayCard: {
     backgroundColor: COLORS.surface,
     borderRadius: 14,
