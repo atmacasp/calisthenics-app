@@ -75,7 +75,7 @@ export default function MovementDetailScreen() {
     if (!userId || movementLocked || starting) return;
     setStarting(true);
     try {
-      const newSession = await workoutService.startSession(userId);
+      const newSession = await workoutService.beginSession(userId);
       startSession(newSession.id);
       addMovement({
         id: movement.id,

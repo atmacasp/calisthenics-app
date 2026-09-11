@@ -63,7 +63,7 @@ export function useProgramDay(userId?: string) {
     if (!userId || !plan || starting || plan.movements.length === 0) return;
     setStarting(true);
     try {
-      const session = await workoutService.startSession(userId, plan.program.id);
+      const session = await workoutService.beginSession(userId, plan.program.id);
       startSessionInStore(session.id, `${plan.program.name} · ${plan.dayName}`);
       plan.movements.forEach((pm) => {
         if (!pm.movementId) return;

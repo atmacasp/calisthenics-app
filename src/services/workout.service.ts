@@ -23,6 +23,36 @@ export const workoutService = {
     if (error) throw error;
     return data;
   },
+
+  /**
+   * Antrenman başlatmanın TEK kapısı.
+   *
+   * Hiç set girilmemiş yarım bir oturum varsa yenisini açmak yerine onu geri
+   * kullanır (yoksa her yanlış dokunuş DB'de çöp satır bırakıyordu) - AMA
+   * started_at'i o anki zamana çeker. Bu damga olmadan saatler önce açılmış
+   * boş satır geri kullanıldığında antrenman 3 saat 38 dakika sürmüş
+   * görünüyordu: süre ended_at - started_at ile hesaplanıyor ve sayaç
+   * kullanıcı "başlat"a basmadan çok önce başlamış oluyordu.
+   *
+   * program_id de tazeleniyor: boş satır program günüyle açılıp serbest
+   * antrenmana dönülmüşse (ya da tersi) eski bağ kalmasın.
+   */
+  async beginSession(userId: string, programId?: string) {
+    const unfinished = await workoutService.getUnfinishedSession(userId);
+
+    if (unfinished && unfinished.setCount === 0) {
+      const { data, error } = await supabase
+        .from("workout_sessions")
+        .update({ started_at: new Date().toISOString(), program_id: programId ?? null })
+        .eq("id", unfinished.id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    }
+
+    return workoutService.startSession(userId, programId);
+  },
   async endSession(sessionId: string, userId: string) {
     const { error } = await supabase
       .from("workout_sessions")

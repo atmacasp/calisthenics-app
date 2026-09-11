@@ -23,15 +23,18 @@ export default function WorkoutStartScreen() {
 
         // Hiç set girilmemiş yarım oturum varsa yenisini açmak yerine onu
         // kullanırız - aksi halde her yarım deneme DB'de çöp satır bırakıyordu.
+        // beginSession o satırın started_at'ini ŞİMDİ'ye çekiyor; yoksa saat
+        // önce açılmış boş satır yüzünden antrenman saatlerce sürmüş görünüyordu.
         if (unfinished && unfinished.setCount === 0) {
+          const reused = await workoutService.beginSession(session.user.id);
           if (cancelled) return;
           // Bellekteki oturum zaten buysa startSession çağırma: o, hareket
           // listesini sıfırlıyor. Kullanıcı hareket ekleyip (henüz set
           // girmeden) ana sayfaya döndüyse seçtikleri kaybolurdu.
-          if (activeSessionId !== unfinished.id) {
-            startSession(unfinished.id, unfinished.programName);
+          if (activeSessionId !== reused.id) {
+            startSession(reused.id, unfinished.programName);
           }
-          router.replace(`/workout/session/${unfinished.id}`);
+          router.replace(`/workout/session/${reused.id}`);
           return;
         }
 
@@ -47,7 +50,9 @@ export default function WorkoutStartScreen() {
                 text: "Yeni Başlat",
                 style: "destructive",
                 onPress: async () => {
-                  const created = await workoutService.startSession(session.user.id);
+                  // Setli bir oturum dururken beginSession geri kullanmaz,
+                  // yeni satır açar - "Yeni Başlat" tam olarak bunu istiyor.
+                  const created = await workoutService.beginSession(session.user.id);
                   startSession(created.id);
                   router.replace(`/workout/session/${created.id}`);
                 },
@@ -65,7 +70,7 @@ export default function WorkoutStartScreen() {
           return;
         }
 
-        const created = await workoutService.startSession(session.user.id);
+        const created = await workoutService.beginSession(session.user.id);
         if (cancelled) return;
         startSession(created.id);
         router.replace(`/workout/session/${created.id}`);

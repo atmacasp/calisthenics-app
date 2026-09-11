@@ -90,7 +90,7 @@ export default function WorkoutScreen() {
     if (!userId || startingId) return;
     setStartingId(suggestion.movement.id);
     try {
-      const newSession = await workoutService.startSession(userId);
+      const newSession = await workoutService.beginSession(userId);
       startSession(newSession.id);
       addMovement({
         id: suggestion.movement.id,
